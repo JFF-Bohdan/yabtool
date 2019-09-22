@@ -106,4 +106,4 @@ venv.bak/
 # IDE and dev files
 .idea/
 data*/
-# *.secret
+*secret*
