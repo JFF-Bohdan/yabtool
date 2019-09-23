@@ -1,3 +1,4 @@
 git+https://github.com/Delgan/loguru.git
 terminaltables==3.1.0
 tqdm==4.31.1
+jinja2schema==0.1.4
