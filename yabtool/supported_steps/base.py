@@ -44,8 +44,11 @@ class BaseFlowStep(object):
         if additional_context:
             mixed_context = {**mixed_context, **additional_context}
 
+        return self._render_from_template_and_context(template, mixed_context)
+
+    def _render_from_template_and_context(self, template, context):
         jinja2_template = self.rendering_environment.from_string(template)
-        return jinja2_template.render(**mixed_context)
+        return jinja2_template.render(**context)
 
     def _get_step_context(self):
         return {**self.step_context, **self.secret_context}

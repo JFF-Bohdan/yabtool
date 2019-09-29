@@ -30,20 +30,25 @@ flows:
         output_file_name: "{{output_archive_name}}.sha256"
         file_name_in_validation_file: "{{backup_file_name}}"
         hash_type: "sha256"
+        generates:
+          output_archive_hash_file_name: "{{output_file_name}}"
       - name: "validate_7z_arhive"
         command_template: "7z t {{output_archive_name}} * -r -p{{archive_password}}"
         dry_run_command: "7z"
         relative_secrets:
           - 7z_comress
       - name: "s3_multipart_upload"
-        bucket: "{{base_bucket_prefix}}backups/{{main_database_name}}"
+        prefix: "backups/{{main_database_name}}/"
+        source_files:
+          - source_file: "{{output_archive_name}}"
+          - source_file: "{{output_archive_hash_file_name}}"
         uploads:
           week_daily:
             source_file: "{{output_archive_name}}"
-            destination_file: "{{bucket}}/{{week_day_short_name}}/{{base_name(output_archive_name)}}"
+            destination_file: "{{bucket}}/{{week_day_short_name}}/{{output_archive_name | base_name}}"
           weekly:
             source_file: "{{output_archive_name}}"
-            destination_file: "{{bucket}}/{{week_number}}/{{base_name(output_archive_name)}}"
+            destination_file: "{{bucket}}/{{week_number}}/{{output_archive_name | base_name}}"
           monthly:
             source_file: "{{output_archive_name}}"
-            destination_file: "{{bucket}}/{{month_short_name}}/{{base_name(output_archive_name)}}"
+            destination_file: "{{bucket}}/{{month_short_name}}/{{output_archive_name | base_name}}"

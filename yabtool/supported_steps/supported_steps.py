@@ -1,9 +1,13 @@
 import codecs
 import hashlib
 import os
+import re
 import subprocess
 
+import boto3
+
 from .base import BaseFlowStep, DryRunExecutionError
+from .s3boto_client import S3BotoClient
 
 
 class ThirdPartyCommandsExecutor(object):
@@ -175,7 +179,73 @@ class Validate7ZArchive(BaseFlowStep):
 
 class S3MultipartFileUpload(BaseFlowStep):
     def run(self, dry_run=False):
+        S3_BUCKET_NAME_REGEX = "^[a-zA-Z0-9.\-_]{1,255}$"
+        DEST_NAME_TEMPLATE = "{{base_prefix}}{{backup_type}}/{{source_file|base_name}}"
+
+        self.logger.debug("self.secret_context: {}".format(self.secret_context))
+
+        base_bucket_prefix = self.secret_context["base_bucket_prefix"]
+
+        if dry_run:
+            pattern = re.compile(S3_BUCKET_NAME_REGEX)
+            if not pattern.match(base_bucket_prefix):
+                raise DryRunExecutionError("base bucket name should match regex '{}'".format(S3_BUCKET_NAME_REGEX))
+
+        region = self.secret_context["region"]
+
+        targets = self.step_context["source_files"]
+        raw_client = self._crete_s3_client()
+
+        client = S3BotoClient(self.logger, raw_client)
+
+        if not dry_run:
+            if not client.bucket_exists(base_bucket_prefix):
+                self.logger.info("creating bucker '{}'".format(base_bucket_prefix))
+                client.create_bucket(base_bucket_prefix, region=region)
+
+        backup_type = "flat"
+
+        prefix = self._render_parameter("prefix")
+        s3_name_generation_context = {
+            "base_prefix": prefix,
+            "backup_type": backup_type
+        }
+
+        for target_file in targets:
+            source_file = target_file["source_file"]
+
+            source_file = self._render_result(source_file)
+            self.logger.debug("source_file: {}".format(source_file))
+
+            if not dry_run:
+                assert os.path.exists(source_file)
+
+            s3_name_generation_context["source_file"] = source_file
+            dest_file_name = self._render_result(DEST_NAME_TEMPLATE, s3_name_generation_context)
+
+            self.logger.debug(
+                "going to upload with:\n\tbase_bucket_prefix: '{}'\n\tdest_file_name: '{}'\n\tsource_file: '{}'".format(
+                    base_bucket_prefix,
+                    dest_file_name,
+                    source_file
+                )
+            )
+
+            if not dry_run:
+                client.put_object(base_bucket_prefix, dest_file_name, source_file)
+
         return super().run(dry_run)
+
+    def _crete_s3_client(self):
+        region = self.secret_context.get("region")
+        self.logger.debug("S3 region: '{}'".format(region))
+
+        return boto3.client(
+            "s3",
+            region_name=region,
+            aws_access_key_id=self.secret_context["aws_access_key_id"],
+            aws_secret_access_key=self.secret_context["aws_secret_access_key"]
+        )
 
     @classmethod
     def step_name(cls):

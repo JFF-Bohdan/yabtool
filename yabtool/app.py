@@ -152,12 +152,11 @@ class RenderingContextInitializer(object):
         self.logger.warning("performing dry run")
         self._run(dry_run=True)
 
+        return True
+
+    def run(self):
         self.logger.warning("performing active run")
         self._run(dry_run=False)
-
-        # self._run_flow()
-
-        return True
 
     @staticmethod
     def _load_yaml_file(file_name, codec="utf-8"):
@@ -322,6 +321,7 @@ class RenderingContextInitializer(object):
         env.filters["extract_year_four_digits"] = jinja2_custom_filter_extract_year_four_digits
         env.filters["extract_month_two_digits"] = jinja2_custom_filter_extract_month_two_digits
         env.filters["extract_day_two_digits"] = jinja2_custom_filter_extract_day_two_digits
+        env.filters["base_name"] = os.path.basename
 
         return env
 
@@ -336,7 +336,8 @@ class YabtoolApplication(object):
 
         context_initializer = RenderingContextInitializer(self.logger)
         try:
-            self.rendering_context = context_initializer.initialize(args)
+            context_initializer.initialize(args)
+            context_initializer.run()
         finally:
             folder_name = context_initializer.rendering_context.temporary_folder
             if os.path.exists(folder_name) and os.path.isdir(folder_name):
