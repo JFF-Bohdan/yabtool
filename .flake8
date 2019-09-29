@@ -11,6 +11,10 @@ max-line-length = 120
 max-complexity = 10
 filename = *.py
 format = default
+# import-order-style=google
+# application-import-names=google
+# import-order-style=google
+import-order-style=google
 inline-quotes = "
 ignore =
 	# E221 multiple spaces before operator

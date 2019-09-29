@@ -14,4 +14,4 @@ repos:
         name: No secret files should be in repository
         entry: No secret files should be in repository
         language: fail
-        files: '^.*secret.*'
+        files: '.*secret.*'

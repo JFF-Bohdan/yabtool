@@ -5,7 +5,6 @@ from loguru import logger
 
 from .app import YabtoolApplication
 
-
 if __name__ == "__main__":
     tm_begin = datetime.datetime.utcnow()
     logger.remove()

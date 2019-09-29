@@ -1,7 +1,6 @@
-from dupfilesremover import __version__
-
 from setuptools import find_packages, setup
 
+from yabtool import __version__
 
 try:  # for pip >= 10
     from pip._internal.req import parse_requirements

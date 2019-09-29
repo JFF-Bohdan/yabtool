@@ -1,4 +1,6 @@
 __version__ = "0.0.1.0"
 __app_name__ = "yabtool"
 __human_readable_app_name__ = "Yet Another Backup Tool"
-__package_description__ = "Yet Another Backup Tool with controlled flow and archives rolling"
+__package_description__ = (
+    "Yet Another Backup Tool with controlled flow and archives rolling"
+)

@@ -83,3 +83,11 @@ local_install:
 develop_install:
 	$(PYTHON) setup.py install
 	 python setup.py develop
+
+.PHONY: isort
+isort:
+	$(PYTHON) -m isort -rc $(MODULE_NAME)
+
+.PHONY: black
+black:
+	$(PYTHON) -m black $(MODULE_NAME)

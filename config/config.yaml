@@ -1,0 +1,40 @@
+flows:
+  fb7zs3-flow:
+    description: "Backup of firebird databases with further compression using 7z and upload to the S3 storage"
+    steps:
+      - name: "mkdir_for_backup"
+        description: "Makes directory for backup output"
+        generation_mask: "{{yabtool_exec_folder}}/{{main_database_name}}/{{backup_start_timestamp|extract_year_four_digits}}-{{backup_start_timestamp|extract_month_two_digits}}-{{backup_start_timestamp|extract_day_two_digits}}_{{main_database_name}}_backup"
+        generates:
+          output_folder_name: "{{result}}"
+      - name: "firebird_backup"
+        command_template: "gbak -backup_database -user {{user_name}} -password {{password}} -metadata -verbose -y {{output_folder_name}}/{{backup_log_name}} {{database_host}}:{{database_path}} {{output_folder_name}}/{{backup_file_name}}"
+        backup_log_name: "backup.log"
+        backup_file_name: "{{main_database_name}}.fbk"
+        dry_run_command: "gbak -z"
+      - name: "calculate_file_hash_and_save_in_file"
+        input_file_name: "{{output_folder_name}}/{{backup_file_name}}"
+        output_file_name: "{{output_folder_name}}/{{backup_file_name}}.sha256"
+        hash_type: "sha256"
+      - name: "7z_comress"
+        command_template: "7z a {{output_archive_name}} -p{{archive_password}} -mhe -t7z  {{output_folder_name}}"
+        output_archive_name: "{{output_folder_name}}.7z"
+        dry_run_command: "7z"
+      - name: "calculate_file_hash_and_save_in_file"
+        input_file_name: "{{output_archive_name}}"
+        output_file_name: "{{output_folder_name}}/{{backup_file_name}}.sha256"
+        hash_type: "sha256"
+      - name: "validate_7z_arhive"
+        command_template: "7z t {{output_archive_name}} * -r -p{{archive_password}}"
+      - name: "s3_multipart_upload"
+        bucket: "{{base_bucket_prefix}}backups/{{main_database_name}}"
+        uploads:
+          week_daily:
+            source_file: "{{output_archive_name}}"
+            destination_file: "{{bucket}}/{{week_day_short_name}}/{{base_name(output_archive_name)}}"
+          weekly:
+            source_file: "{{output_archive_name}}"
+            destination_file: "{{bucket}}/{{week_number}}/{{base_name(output_archive_name)}}"
+          monthly:
+            source_file: "{{output_archive_name}}"
+            destination_file: "{{bucket}}/{{month_short_name}}/{{base_name(output_archive_name)}}"
