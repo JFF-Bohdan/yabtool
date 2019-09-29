@@ -1,19 +1,18 @@
+import codecs
+import hashlib
 import os
 import subprocess
 
-from .base import BaseFlowStep
+from .base import BaseFlowStep, DryRunExecutionError
 
 
 class ThirdPartyCommandsExecutor(object):
-    def execute(self, command):
+    @staticmethod
+    def execute(command):
         return subprocess.run(command, stdout=subprocess.PIPE, stdin=subprocess.PIPE)
 
 
 class MakeDirectoryForBackup(BaseFlowStep):
-    @classmethod
-    def step_name(cls):
-        return "mkdir_for_backup"
-
     def run(self, dry_run=False):
 
         res = self._render_parameter("generation_mask")
@@ -22,20 +21,13 @@ class MakeDirectoryForBackup(BaseFlowStep):
         if not dry_run:
             os.makedirs(res)
 
-        return self._generate_output_variables(res)
+        self.additional_output_context = {"result": res}
 
-    def _generate_output_variables(self, step_result):
-        additional_context = {"result": step_result}
+        return super().run(dry_run)
 
-        res = dict()
-        for requested_value_name, requested_value_template in self.step_context[
-            "generates"
-        ].items():
-            res[requested_value_name] = self._render_result(
-                requested_value_template, additional_context
-            )
-
-        return res
+    @classmethod
+    def step_name(cls):
+        return "mkdir_for_backup"
 
 
 class MakeFirebirdDatabaseBackup(BaseFlowStep):
@@ -52,13 +44,12 @@ class MakeFirebirdDatabaseBackup(BaseFlowStep):
         dry_run_command = self._render_parameter("dry_run_command")
         self.step_context["dry_run_command"] = dry_run_command
 
-        executor = ThirdPartyCommandsExecutor()
         if not dry_run:
             self.logger.info("going to execute: {}".format(command))
-            result = executor.execute(command)
+            result = ThirdPartyCommandsExecutor.execute(command)
         else:
             self.logger.info("going to execute: {}".format(dry_run_command))
-            result = executor.execute(dry_run_command)
+            result = ThirdPartyCommandsExecutor.execute(dry_run_command)
 
         if not dry_run:
             result.check_returncode()
@@ -71,24 +62,121 @@ class MakeFirebirdDatabaseBackup(BaseFlowStep):
 
 
 class CalculateFileHashAndSaveToFile(BaseFlowStep):
+    def run(self, dry_run=False):
+        input_file_name = self._render_parameter("input_file_name")
+        self.step_context["input_file_name"] = input_file_name
+
+        output_file_name = self._render_parameter("output_file_name")
+        self.step_context["output_file_name"] = output_file_name
+
+        # file_name_in_validation_file = self._render_parameter("file_name_in_validation_file")
+        # self.step_context["file_name_in_validation_file"] = file_name_in_validation_file
+
+        hash_type = self.step_context["hash_type"]
+        algorithms_available = [str(item).lower() for item in hashlib.algorithms_available]
+        self.logger.debug("algorithms_available: {}".format(algorithms_available))
+
+        if hash_type not in algorithms_available:
+            raise DryRunExecutionError("")
+
+        if not dry_run:
+            self.logger.info("going calculate hash ('{}') for '{}'".format(hash_type, input_file_name))
+            hash_value = self._hash_file(input_file_name, hash_type)
+            output_data = "{} *{}\n".format(hash_value, os.path.basename(input_file_name))
+            self._save_data(output_file_name, output_data)
+
+        return super().run(dry_run)
+
+    @staticmethod
+    def _save_data(file_name, data, codepage="utf-8"):
+        with codecs.open(file_name, "w", codepage) as output_file:
+            output_file.write(data)
+
+    @staticmethod
+    def _hash_file(file_name, hash_type):
+        BLOCKSIZE = 65536
+
+        hasher = hashlib.new(hash_type)
+        with open(file_name, "rb") as afile:
+            buf = afile.read(BLOCKSIZE)
+            while len(buf) > 0:
+                hasher.update(buf)
+                buf = afile.read(BLOCKSIZE)
+
+        return str(hasher.hexdigest())
+
     @classmethod
     def step_name(cls):
         return "calculate_file_hash_and_save_in_file"
 
 
 class CompressFileWithSevenZ(BaseFlowStep):
+
+    def run(self, dry_run=False):
+        output_archive_name = self._render_parameter("output_archive_name")
+        self.step_context["output_archive_name"] = output_archive_name
+
+        command = self._render_parameter("command_template")
+        self.step_context["command"] = command
+
+        dry_run_command = self._render_parameter("dry_run_command")
+        self.step_context["dry_run_command"] = dry_run_command
+
+        if not dry_run:
+            self.logger.info("going to execute: {}".format(command))
+            result = ThirdPartyCommandsExecutor.execute(command)
+        else:
+            self.logger.info("going to execute: {}".format(dry_run_command))
+            result = ThirdPartyCommandsExecutor.execute(dry_run_command)
+
+        self.logger.info("returncode: {}".format(result.returncode))
+        self.logger.info("stderr: {}".format(result.stderr))
+        self.logger.info("stdout: {}".format(result.stdout))
+
+        if not dry_run:
+            result.check_returncode()
+
+        return super().run(dry_run)
+
     @classmethod
     def step_name(cls):
         return "7z_comress"
 
 
 class Validate7ZArchive(BaseFlowStep):
+
+    def run(self, dry_run=False):
+        command = self._render_parameter("command_template")
+        self.step_context["command"] = command
+
+        dry_run_command = self._render_parameter("dry_run_command")
+        self.step_context["dry_run_command"] = dry_run_command
+
+        if not dry_run:
+            self.logger.info("going to execute: {}".format(command))
+            result = ThirdPartyCommandsExecutor.execute(command)
+        else:
+            self.logger.info("going to execute: {}".format(dry_run_command))
+            result = ThirdPartyCommandsExecutor.execute(dry_run_command)
+
+        self.logger.info("returncode: {}".format(result.returncode))
+        self.logger.info("stderr: {}".format(result.stderr))
+        self.logger.info("stdout: {}".format(result.stdout))
+
+        if not dry_run:
+            result.check_returncode()
+
+        return super().run(dry_run)
+
     @classmethod
     def step_name(cls):
         return "validate_7z_arhive"
 
 
 class S3MultipartFileUpload(BaseFlowStep):
+    def run(self, dry_run=False):
+        return super().run(dry_run)
+
     @classmethod
     def step_name(cls):
         return "s3_multipart_upload"

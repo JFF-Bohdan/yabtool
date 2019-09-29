@@ -2,13 +2,14 @@ import argparse
 import codecs
 import datetime
 import os
+import shutil
 import uuid
 
-import jinja2schema
 from jinja2 import BaseLoader, Environment, StrictUndefined
-from yaml import safe_load
 
 from yabtool.version import __version__
+
+from yaml import safe_load
 
 from .supported_steps import create_steps_factory
 
@@ -40,15 +41,15 @@ def get_cli_args():
 
 
 def jinja2_custom_filter_extract_year_four_digits(value):
-    return "YY"
+    return value.strftime("%Y")
 
 
 def jinja2_custom_filter_extract_month_two_digits(value):
-    return "MM"
+    return value.strftime("%m")
 
 
 def jinja2_custom_filter_extract_day_two_digits(value):
-    return "DD"
+    return value.strftime("%d")
 
 
 class RenderingContext(object):
@@ -79,75 +80,82 @@ class ConfigurationValidationException(BaseException):
 
 class RenderingContextInitializer(object):
     def __init__(self, logger):
-        self._rendering_context = RenderingContext()
+        self.rendering_context = RenderingContext()
         self.logger = logger
         self._steps_factory = None
         self._backup_start_timestamp = datetime.datetime.utcnow()
 
     def initialize(self, args):
-        self._rendering_context.config_file_name = self._get_config_file_name(args)
+        self.rendering_context.config_file_name = self._get_config_file_name(args)
         self.logger.debug(
-            "config_file_name: '{}'".format(self._rendering_context.config_file_name)
+            "config_file_name: '{}'".format(self.rendering_context.config_file_name)
         )
-        if not self._rendering_context.config_file_name:
+        if not self.rendering_context.config_file_name:
             raise ConfigurationValidationException("No configuration file specified")
 
-        if not os.path.exists(self._rendering_context.config_file_name):
+        if not os.path.exists(self.rendering_context.config_file_name):
             raise ConfigurationValidationException(
                 "Configuration file does not exists. Path: '{}'".format(
-                    self._rendering_context.config_file_name
+                    self.rendering_context.config_file_name
                 )
             )
 
-        self._rendering_context.config_context = self._load_yaml_file(
-            self._rendering_context.config_file_name
+        self.rendering_context.config_context = self._load_yaml_file(
+            self.rendering_context.config_file_name
         )
 
-        self._rendering_context.secrets_file_name = self._get_secrets_file_name(args)
-        if not self._rendering_context.secrets_file_name:
+        self.rendering_context.secrets_file_name = self._get_secrets_file_name(args)
+        if not self.rendering_context.secrets_file_name:
             raise ConfigurationValidationException(
                 "Secrets file path doesn't specified"
             )
 
-        if not os.path.exists(self._rendering_context.secrets_file_name):
+        if not os.path.exists(self.rendering_context.secrets_file_name):
             raise ConfigurationValidationException(
                 "Secrets file does not exists. Path: '{}'".format(
-                    self._rendering_context.secrets_file_name
+                    self.rendering_context.secrets_file_name
                 )
             )
 
-        self._rendering_context.secrets_context = self._load_yaml_file(
-            self._rendering_context.secrets_file_name
+        self.rendering_context.secrets_context = self._load_yaml_file(
+            self.rendering_context.secrets_file_name
         )
 
-        self._rendering_context.database_name = self._get_database_name(args)
+        self.rendering_context.database_name = self._get_database_name(args)
         self.logger.debug(
-            "database_name: '{}'".format(self._rendering_context.database_name)
+            "database_name: '{}'".format(self.rendering_context.database_name)
         )
 
-        self._rendering_context.flow_name = self._get_flow_name(args)
-        self.logger.debug("flow_name: '{}'".format(self._rendering_context.flow_name))
+        self.rendering_context.flow_name = self._get_flow_name(args)
+        self.logger.debug("flow_name: '{}'".format(self.rendering_context.flow_name))
 
-        self._rendering_context.temporary_folder = self._get_temporary_folder(args)
+        self.rendering_context.temporary_folder = self._get_temporary_folder(args)
 
-        self._rendering_context.temporary_folder = os.path.join(
-            self._rendering_context.temporary_folder,
+        self.rendering_context.temporary_folder = os.path.join(
+            self.rendering_context.temporary_folder,
             self._create_folder_name_for_execution(),
         )
 
-        os.makedirs(self._rendering_context.temporary_folder)
+        os.makedirs(self.rendering_context.temporary_folder)
 
         self.logger.debug(
-            "temporary_folder: '{}'".format(self._rendering_context.temporary_folder)
+            "temporary_folder: '{}'".format(self.rendering_context.temporary_folder)
         )
 
         self._steps_factory = create_steps_factory()
 
-        self._rendering_context.basic_values = self._init_basic_values()
+        self.rendering_context.basic_values = self._init_basic_values()
         self.logger.debug(
-            "basic_values: {}".format(self._rendering_context.basic_values)
+            "basic_values: {}".format(self.rendering_context.basic_values)
         )
-        self._validate_steps_context()
+
+        self.logger.warning("performing dry run")
+        self._run(dry_run=True)
+
+        self.logger.warning("performing active run")
+        self._run(dry_run=False)
+
+        # self._run_flow()
 
         return True
 
@@ -187,36 +195,40 @@ class RenderingContextInitializer(object):
     def _init_basic_values(self):
         res = dict()
 
-        res["main_database_name"] = self._rendering_context.database_name
+        res["main_database_name"] = self.rendering_context.database_name
         res["week_day_short_name"] = self._backup_start_timestamp.strftime("%a")
         res["week_number"] = self._backup_start_timestamp.strftime("%U")
         res["month_short_name"] = self._backup_start_timestamp.strftime("%b")
         res["backup_start_timestamp"] = self._backup_start_timestamp
-        res["flow_name"] = self._rendering_context.flow_name
-        res["yabtool_exec_folder"] = self._rendering_context.temporary_folder
+        res["flow_name"] = self.rendering_context.flow_name
+        res["yabtool_exec_folder"] = self.rendering_context.temporary_folder
 
         return res
 
-    def _validate_steps_context(self):
-        assert self._rendering_context.flow_name
+    def _run(self, dry_run):
+        assert self.rendering_context.flow_name
 
-        flow_data = self._rendering_context.config_context["flows"][
-            self._rendering_context.flow_name
+        flow_data = self.rendering_context.config_context["flows"][
+            self.rendering_context.flow_name
         ]
         flow_description = flow_data["description"]
 
         self.logger.info("flow_description: '{}'".format(flow_description))
 
-        self._rendering_context.previous_steps_values = list()
+        self.rendering_context.previous_steps_values = list()
 
         rendering_environment = self._create_rendering_environment()
-        secret_database_context = self._rendering_context.secrets_context["databases"][
-            self._rendering_context.database_name
+        secret_database_context = self.rendering_context.secrets_context["databases"][
+            self.rendering_context.database_name
         ]
 
         assert self._steps_factory
         for step_context in flow_data["steps"]:
             step_name = step_context["name"]
+
+            if step_name == "validate_7z_arhive":
+                self.logger.debug("TBD")
+
             step_description = step_context.get("description", "<no description>")
 
             self.logger.debug(
@@ -228,86 +240,62 @@ class RenderingContextInitializer(object):
                     "Unknown step '{}'".format(step_name)
                 )
 
-            self.logger.debug("performing dry run for step '{}'".format(step_name))
+            if dry_run:
+                self.logger.debug("performing dry run for step '{}'".format(step_name))
+            else:
+                self.logger.debug("performing active run for step '{}'".format(step_name))
 
             secret_context = dict()
-            if ("steps_configuration" in secret_database_context) and (
-                step_name in secret_database_context["steps_configuration"]
-            ):
-                secret_context = secret_database_context["steps_configuration"][
-                    step_name
-                ]
+            relative_secrets = step_context.get("relative_secrets", [])
+            required_secrets = [step_name]
+            required_secrets.extend(relative_secrets)
+
+            for required_secret in required_secrets:
+                if (
+                        ("steps_configuration" in secret_database_context) and
+                        (required_secret in secret_database_context["steps_configuration"])
+                ):
+                    secret_context = {
+                        **secret_context,
+                        **secret_database_context["steps_configuration"][required_secret]
+                    }
 
             step_object = self._steps_factory.create_object(
                 step_name,
                 logger=self.logger,
-                rendering_context=self._rendering_context,
+                rendering_context=self.rendering_context,
                 step_context=step_context,
                 secret_context=secret_context,
                 rendering_environment=rendering_environment,
             )
 
-            additional_variables = step_object.run(dry_run=True)
+            if dry_run:
+                self.logger.info("initializing dry run for step: '{}'".format(step_name))
+            else:
+                self.logger.info("initializing active run for step: '{}'".format(step_name))
+
+            additional_variables = step_object.run(dry_run=dry_run)
             self.logger.debug("additional_variables: {}".format(additional_variables))
 
-            self._rendering_context.previous_steps_values.append(additional_variables)
-
-    def _get_all_required_parameters_for_step(self, step_name, step_context):
-        res = dict()
-        exclude_root_elements = ["name", "description", "generates"]
-        for step_context_item_name, step_context_item_value in step_context.items():
-            if step_context_item_name in exclude_root_elements:
-                continue
-
-            res[step_context_item_name] = self._extract_all_parameters_low(
-                step_name, step_context_item_name, step_context_item_value
-            )
-
-        self.logger.debug("parameters for step: {}".format(res))
-
-        return res
-        # flow_context = self._rendering_context.config_context["flows"][self._rendering_context.flow_name]
-
-    def _extract_all_parameters_low(self, step_name, parameter_name, parameter_value):
-
-        if isinstance(parameter_value, list) or isinstance(parameter_value, tuple):
-            res = list()
-
-            for item in parameter_value:
-                res.extend(
-                    self._extract_all_parameters_low(step_name, parameter_name, item)
-                )
-
-            return res
-
-        elif isinstance(parameter_name, dict):
-            res = list()
-
-            for key, value in parameter_name.items():
-                res.extend(self._extract_all_parameters_low(step_name, key, value))
-
-            return res
-
-        variables = jinja2schema.infer(parameter_value)
-        return [value_name for value_name, _ in variables.items()]
+            self.rendering_context.previous_steps_values.append(additional_variables)
 
     def _get_database_name(self, args):
         if args.database:
             return args.database
 
-        assert self._rendering_context.secrets_context
+        assert self.rendering_context.secrets_context
 
-        return self._rendering_context.secrets_context["defaults"]["database"]
+        return self.rendering_context.secrets_context["defaults"]["database"]
 
     def _get_flow_name(self, args):
         if args.flow:
             return args.flow
 
-        assert self._rendering_context.secrets_context
-        assert self._rendering_context.database_name
+        assert self.rendering_context.secrets_context
+        assert self.rendering_context.database_name
 
-        database_context = self._rendering_context.secrets_context["databases"][
-            self._rendering_context.database_name
+        database_context = self.rendering_context.secrets_context["databases"][
+            self.rendering_context.database_name
         ]
         return database_context["flow_type"]
 
@@ -315,18 +303,14 @@ class RenderingContextInitializer(object):
         if args.temporary_folder:
             return args.temporary_folder
 
-        temporary_folder = self._rendering_context.secrets_context["defaults"][
-            "temporary_folder"
-        ]
+        temporary_folder = self.rendering_context.secrets_context["defaults"]["temporary_folder"]
         if temporary_folder:
             return temporary_folder
 
-        return self._rendering_context.config_context["defaults"]["temporary_folder"]
+        return self.rendering_context.config_context["defaults"]["temporary_folder"]
 
     def _create_folder_name_for_execution(self):
-        res = "{}_{}".format(
-            self._backup_start_timestamp.isoformat(), str(uuid.uuid4())
-        )
+        res = "{}_{}".format(self._backup_start_timestamp.isoformat(), str(uuid.uuid4()))
         res = res.replace(":", "")
         res = res.replace("-", "")
         return res
@@ -345,12 +329,18 @@ class RenderingContextInitializer(object):
 class YabtoolApplication(object):
     def __init__(self, logger):
         self.logger = logger
-        self._rendering_context = None
+        self.rendering_context = None
 
     def run(self):
         args = get_cli_args()
 
         context_initializer = RenderingContextInitializer(self.logger)
-        self._rendering_context = context_initializer.initialize(args)
+        try:
+            self.rendering_context = context_initializer.initialize(args)
+        finally:
+            folder_name = context_initializer.rendering_context.temporary_folder
+            if os.path.exists(folder_name) and os.path.isdir(folder_name):
+                self.logger.info("going to remove temporary folder: {}".format(folder_name))
+                shutil.rmtree(folder_name)
 
         return True

@@ -12,20 +12,29 @@ flows:
         backup_log_name: "backup.log"
         backup_file_name: "{{main_database_name}}.fbk"
         dry_run_command: "gbak -z"
+        generates:
+          backup_file_name: "{{backup_file_name}}"
       - name: "calculate_file_hash_and_save_in_file"
         input_file_name: "{{output_folder_name}}/{{backup_file_name}}"
         output_file_name: "{{output_folder_name}}/{{backup_file_name}}.sha256"
+        file_name_in_validation_file: "{{backup_file_name}}"
         hash_type: "sha256"
       - name: "7z_comress"
         command_template: "7z a {{output_archive_name}} -p{{archive_password}} -mhe -t7z  {{output_folder_name}}"
         output_archive_name: "{{output_folder_name}}.7z"
         dry_run_command: "7z"
+        generates:
+          output_archive_name: "{{output_archive_name}}"
       - name: "calculate_file_hash_and_save_in_file"
         input_file_name: "{{output_archive_name}}"
-        output_file_name: "{{output_folder_name}}/{{backup_file_name}}.sha256"
+        output_file_name: "{{output_archive_name}}.sha256"
+        file_name_in_validation_file: "{{backup_file_name}}"
         hash_type: "sha256"
       - name: "validate_7z_arhive"
         command_template: "7z t {{output_archive_name}} * -r -p{{archive_password}}"
+        dry_run_command: "7z"
+        relative_secrets:
+          - 7z_comress
       - name: "s3_multipart_upload"
         bucket: "{{base_bucket_prefix}}backups/{{main_database_name}}"
         uploads:

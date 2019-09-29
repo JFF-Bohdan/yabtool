@@ -1,3 +1,7 @@
+class DryRunExecutionError(BaseException):
+    pass
+
+
 class BaseFlowStep(object):
     def __init__(
         self,
@@ -13,12 +17,16 @@ class BaseFlowStep(object):
         self.rendering_environment = rendering_environment
         self.secret_context = secret_context
 
+        self.additional_output_context = None
+
     @classmethod
     def step_name(cls):
         pass
 
     def run(self, dry_run=False):
-        return dict()
+        output_variables = self._generate_output_variables()
+        self.logger.debug("output_variables: {}".format(output_variables))
+        return output_variables
 
     def _render_parameter(self, parameter_name):
         template = self.step_context[parameter_name]
@@ -41,6 +49,17 @@ class BaseFlowStep(object):
 
     def _get_step_context(self):
         return {**self.step_context, **self.secret_context}
+
+    def _generate_output_variables(self):
+        res = dict()
+
+        if "generates" not in self.step_context:
+            return res
+
+        for requested_value_name, requested_value_template in self.step_context["generates"].items():
+            res[requested_value_name] = self._render_result(requested_value_template, self.additional_output_context)
+
+        return res
 
 
 class StepContextData(object):
