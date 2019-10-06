@@ -1,5 +1,5 @@
 from .supported_steps import (CalculateFileHashAndSaveToFile, CompressFileWithSevenZ, MakeDirectoryForBackup,
-                              MakeFirebirdDatabaseBackup, S3MultipartFileUpload, Validate7ZArchive)
+                              MakeFirebirdDatabaseBackup, S3FileUpload, Validate7ZArchive)
 
 
 class StepsFactory(object):
@@ -25,6 +25,6 @@ def create_steps_factory():
     factory.register_class(CalculateFileHashAndSaveToFile)
     factory.register_class(CompressFileWithSevenZ)
     factory.register_class(Validate7ZArchive)
-    factory.register_class(S3MultipartFileUpload)
+    factory.register_class(S3FileUpload)
 
     return factory

@@ -1,7 +1,7 @@
 from botocore.exceptions import ClientError
 
 
-class S3BotoClient(object):
+class S3BacicBotoClient(object):
     def __init__(self, logger, s3_client):
         self.logger = logger
         self._client = s3_client
@@ -22,6 +22,17 @@ class S3BotoClient(object):
             return False
 
         return True
+
+    def is_object_exists(self, bucket_name, object_name):
+        try:
+            self._client.head_object(Bucket=bucket_name, Key=object_name)
+        except ClientError:
+            return False
+
+        return True
+
+    def create_marker_object(self, bucket_name, object_name, object_content="marker_object"):
+        self.put_object(bucket_name, object_name, object_content.encode("utf-8"))
 
     def bucket_exists(self, bucket_name):
         try:

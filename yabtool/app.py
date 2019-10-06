@@ -201,6 +201,9 @@ class RenderingContextInitializer(object):
         res["backup_start_timestamp"] = self._backup_start_timestamp
         res["flow_name"] = self.rendering_context.flow_name
         res["yabtool_exec_folder"] = self.rendering_context.temporary_folder
+        res["current_year"] = self._backup_start_timestamp.date().year
+        res["lower"] = str.lower
+        res["upper"] = str.upper
 
         return res
 
@@ -340,7 +343,7 @@ class YabtoolApplication(object):
             context_initializer.run()
         finally:
             folder_name = context_initializer.rendering_context.temporary_folder
-            if os.path.exists(folder_name) and os.path.isdir(folder_name):
+            if folder_name and os.path.exists(folder_name) and os.path.isdir(folder_name):
                 self.logger.info("going to remove temporary folder: {}".format(folder_name))
                 shutil.rmtree(folder_name)
 

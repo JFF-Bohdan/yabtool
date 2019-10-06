@@ -6,7 +6,9 @@ exclude =
 	.eggs,
 	__pycache__,
 	log,
-	__init__.py
+	__init__.py,
+	test.py,
+	bp/*
 max-line-length = 120
 max-complexity = 10
 filename = *.py

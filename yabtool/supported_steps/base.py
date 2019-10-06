@@ -17,6 +17,8 @@ class BaseFlowStep(object):
         self.rendering_environment = rendering_environment
         self.secret_context = secret_context
 
+        self.mixed_context = self._get_mixed_context()
+
         self.additional_output_context = None
 
     @classmethod
@@ -28,8 +30,11 @@ class BaseFlowStep(object):
         self.logger.debug("output_variables: {}".format(output_variables))
         return output_variables
 
-    def _render_parameter(self, parameter_name):
-        template = self.step_context[parameter_name]
+    def _render_parameter(self, parameter_name, context=None):
+        if not context:
+            context = self.mixed_context
+
+        template = context[parameter_name]
         self.logger.debug("'{}'@template: '{}'".format(parameter_name, template))
 
         res = self._render_result(template)
@@ -37,9 +42,17 @@ class BaseFlowStep(object):
 
         return res
 
-    def _render_result(self, template, additional_context=None):
+    def _get_mixed_context(self):
         mixed_context = self.rendering_context.to_context()
         mixed_context = {**mixed_context, **self._get_step_context()}
+
+        return mixed_context
+
+    def _get_step_context(self):
+        return {**self.step_context, **self.secret_context}
+
+    def _render_result(self, template, additional_context=None):
+        mixed_context = self.mixed_context
 
         if additional_context:
             mixed_context = {**mixed_context, **additional_context}
@@ -49,9 +62,6 @@ class BaseFlowStep(object):
     def _render_from_template_and_context(self, template, context):
         jinja2_template = self.rendering_environment.from_string(template)
         return jinja2_template.render(**context)
-
-    def _get_step_context(self):
-        return {**self.step_context, **self.secret_context}
 
     def _generate_output_variables(self):
         res = dict()

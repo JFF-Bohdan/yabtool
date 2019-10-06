@@ -7,7 +7,11 @@ import subprocess
 import boto3
 
 from .base import BaseFlowStep, DryRunExecutionError
-from .s3boto_client import S3BotoClient
+from .s3boto_client import S3BacicBotoClient
+
+
+class FileUploadingError(BaseException):
+    pass
 
 
 class ThirdPartyCommandsExecutor(object):
@@ -177,62 +181,53 @@ class Validate7ZArchive(BaseFlowStep):
         return "validate_7z_arhive"
 
 
-class S3MultipartFileUpload(BaseFlowStep):
+class S3FileUpload(BaseFlowStep):
+    # TODO: support dry run
     def run(self, dry_run=False):
         S3_BUCKET_NAME_REGEX = "^[a-zA-Z0-9.\-_]{1,255}$"
-        DEST_NAME_TEMPLATE = "{{base_prefix}}{{backup_type}}/{{source_file|base_name}}"
 
         self.logger.debug("self.secret_context: {}".format(self.secret_context))
 
-        base_bucket_prefix = self.secret_context["base_bucket_prefix"]
+        bucket_name = self.secret_context["bucket_name"]
+        self.logger.debug("bucket_name: '{}'".format(bucket_name))
 
         if dry_run:
             pattern = re.compile(S3_BUCKET_NAME_REGEX)
-            if not pattern.match(base_bucket_prefix):
+            if not pattern.match(bucket_name):
                 raise DryRunExecutionError("base bucket name should match regex '{}'".format(S3_BUCKET_NAME_REGEX))
 
         region = self.secret_context["region"]
 
-        targets = self.step_context["source_files"]
         raw_client = self._crete_s3_client()
 
-        client = S3BotoClient(self.logger, raw_client)
+        client = S3BacicBotoClient(self.logger, raw_client)
 
         if not dry_run:
-            if not client.bucket_exists(base_bucket_prefix):
-                self.logger.info("creating bucker '{}'".format(base_bucket_prefix))
-                client.create_bucket(base_bucket_prefix, region=region)
+            if not client.bucket_exists(bucket_name):
+                self.logger.info("creating bucker '{}'".format(bucket_name))
+                client.create_bucket(bucket_name, region=region)
 
-        backup_type = "flat"
+        database_prefix_in_bucket = self._render_parameter("database_prefix_in_bucket")
+        self.logger.debug("database_prefix_in_bucket: '{}'".format(database_prefix_in_bucket))
 
-        prefix = self._render_parameter("prefix")
-        s3_name_generation_context = {
-            "base_prefix": prefix,
-            "backup_type": backup_type
-        }
+        targets = self.mixed_context["source_files"]
 
-        for target_file in targets:
-            source_file = target_file["source_file"]
+        real_source_file_names = self._get_real_source_file_names(targets)
+        self.logger.info("going to upload these files:\n\t{}".format("\n\t".format(real_source_file_names)))
 
-            source_file = self._render_result(source_file)
-            self.logger.debug("source_file: {}".format(source_file))
+        additional_context = {"database_prefix_in_bucket": database_prefix_in_bucket}
 
-            if not dry_run:
-                assert os.path.exists(source_file)
-
-            s3_name_generation_context["source_file"] = source_file
-            dest_file_name = self._render_result(DEST_NAME_TEMPLATE, s3_name_generation_context)
-
-            self.logger.debug(
-                "going to upload with:\n\tbase_bucket_prefix: '{}'\n\tdest_file_name: '{}'\n\tsource_file: '{}'".format(
-                    base_bucket_prefix,
-                    dest_file_name,
-                    source_file
-                )
+        rules = self.mixed_context["upload_rules"]
+        for rule in rules:
+            self.logger.info("processing upload rule '{}'".format(rule["name"]))
+            self._upload_for_rule(
+                dry_run,
+                client,
+                bucket_name,
+                rule,
+                real_source_file_names,
+                additional_context
             )
-
-            if not dry_run:
-                client.put_object(base_bucket_prefix, dest_file_name, source_file)
 
         return super().run(dry_run)
 
@@ -250,3 +245,59 @@ class S3MultipartFileUpload(BaseFlowStep):
     @classmethod
     def step_name(cls):
         return "s3_multipart_upload"
+
+    def _get_real_source_file_names(self, targets):
+        res = list()
+
+        for target in targets:
+            source_file_name = target["source_file"]
+
+            source_file_name = self._render_result(source_file_name)
+            self.logger.debug("source_file: {}".format(source_file_name))
+            if not os.path.exists(source_file_name):
+                self.logger.error("Can't find source file '{}'".format(source_file_name))
+                raise FileUploadingError("Can't find source file: '{}'".format(source_file_name))
+
+            res.append(source_file_name)
+
+        return res
+
+    def _upload_for_rule(
+            self,
+            dry_run,
+            basic_client,
+            bucket_name,
+            rule,
+            files_on_local_drive,
+            additional_context=None
+    ):
+        destination_prefix = self._render_result(rule["destination_prefix"], additional_context)
+        self.logger.debug("destination_prefix: '{}'".format(destination_prefix))
+
+        validation_name = self._render_result(rule["validation_name"], additional_context)
+        validation_name = os.path.join(destination_prefix, validation_name)
+        validation_name = str(validation_name).replace("\\", "/")
+        self.logger.debug("validation_name: '{}'".format(validation_name))
+
+        if basic_client.is_object_exists(bucket_name, validation_name):
+            self.logger.info("file '{}' already exists in remote bucket, SKIPPING".format(validation_name))
+            return
+
+        if dry_run:
+            return
+
+        basic_client.create_marker_object(bucket_name, validation_name)
+
+        for local_file in files_on_local_drive:
+            assert os.path.exists(local_file)
+
+            dest_object_name = os.path.join(destination_prefix, os.path.basename(local_file))
+            dest_object_name = str(dest_object_name).replace("\\", "/")
+
+            self.logger.info("dest_object_name: '{}'".format(dest_object_name))
+
+            basic_client.put_object(
+                bucket_name,
+                dest_object_name,
+                local_file
+            )
