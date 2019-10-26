@@ -1,3 +1,7 @@
+parameters:
+  remove_temporary_folder: true
+  perform_dry_run: true
+
 flows:
   fb7zs3-flow:
     description: "Backup of firebird databases with further compression using 7z and upload to the S3 storage"
@@ -20,11 +24,12 @@ flows:
         output_file_name: "{{output_folder_name}}/{{backup_file_name}}.sha256"
         file_name_in_validation_file: "{{backup_file_name}}"
         hash_type: "sha256"
-      - name: "7z_comress"
+      - name: "7z_compress"
         command_template: "7z a {{output_archive_name}} -p{{archive_password}} -mhe -t7z  {{output_folder_name}}"
         output_archive_name: "{{output_folder_name}}.7z"
         dry_run_command: "7z"
         generates:
+          output_archive_extension: "7z"
           output_archive_name: "{{output_archive_name}}"
       - name: "calculate_file_hash_and_save_in_file"
         input_file_name: "{{output_archive_name}}"
@@ -33,12 +38,11 @@ flows:
         hash_type: "sha256"
         generates:
           output_archive_hash_file_name: "{{output_file_name}}"
-          output_archive_extension: "7z"
-      - name: "validate_7z_arhive"
+      - name: "validate_7z_archive"
         command_template: "7z t {{output_archive_name}} * -r -p{{archive_password}}"
         dry_run_command: "7z"
         relative_secrets:
-          - 7z_comress
+          - 7z_compress
       - name: "s3_multipart_upload"
         database_prefix_in_bucket: "backups/{{main_database_name}}"
         source_files:

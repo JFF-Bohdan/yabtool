@@ -66,6 +66,9 @@ class RenderingContext(object):
         self.previous_steps_values = list()
         self.temporary_folder = None
 
+        self.remove_temporary_folder = None
+        self.perform_dry_run = None
+
     def to_context(self):
         res = self.basic_values
         for item in self.previous_steps_values:
@@ -78,7 +81,7 @@ class ConfigurationValidationException(BaseException):
     pass
 
 
-class RenderingContextInitializer(object):
+class YabtoolFlowOrchestrator(object):
     def __init__(self, logger):
         self.rendering_context = RenderingContext()
         self.logger = logger
@@ -103,6 +106,10 @@ class RenderingContextInitializer(object):
         self.rendering_context.config_context = self._load_yaml_file(
             self.rendering_context.config_file_name
         )
+
+        config_context = self.rendering_context.config_context
+        self.rendering_context.remove_temporary_folder = config_context["parameters"]["remove_temporary_folder"]
+        self.rendering_context.perform_dry_run = config_context["parameters"]["perform_dry_run"]
 
         self.rendering_context.secrets_file_name = self._get_secrets_file_name(args)
         if not self.rendering_context.secrets_file_name:
@@ -150,27 +157,14 @@ class RenderingContextInitializer(object):
         )
 
         self.logger.warning("performing dry run")
-        self._run(dry_run=True)
+        if self.rendering_context.perform_dry_run:
+            self._run(dry_run=True)
 
         return True
 
     def run(self):
         self.logger.warning("performing active run")
         self._run(dry_run=False)
-
-    @staticmethod
-    def _load_yaml_file(file_name, codec="utf-8"):
-        with codecs.open(file_name, "r", codec) as input_file:
-            return safe_load(input_file.read())
-
-    @staticmethod
-    def _get_secrets_file_name(args):
-        # TODO: use me
-        secrets_file_name = args.secrets
-        secrets_file_name = os.path.abspath(secrets_file_name)
-        secrets_file_name = os.path.normpath(secrets_file_name)
-
-        return secrets_file_name
 
     def _get_config_file_name(self, args):
         config_file_name = args.config
@@ -190,22 +184,6 @@ class RenderingContextInitializer(object):
             config_file_name = os.path.normpath(config_file_name)
 
         return config_file_name
-
-    def _init_basic_values(self):
-        res = dict()
-
-        res["main_database_name"] = self.rendering_context.database_name
-        res["week_day_short_name"] = self._backup_start_timestamp.strftime("%a")
-        res["week_number"] = self._backup_start_timestamp.strftime("%U")
-        res["month_short_name"] = self._backup_start_timestamp.strftime("%b")
-        res["backup_start_timestamp"] = self._backup_start_timestamp
-        res["flow_name"] = self.rendering_context.flow_name
-        res["yabtool_exec_folder"] = self.rendering_context.temporary_folder
-        res["current_year"] = self._backup_start_timestamp.date().year
-        res["lower"] = str.lower
-        res["upper"] = str.upper
-
-        return res
 
     def _run(self, dry_run):
         assert self.rendering_context.flow_name
@@ -227,9 +205,6 @@ class RenderingContextInitializer(object):
         assert self._steps_factory
         for step_context in flow_data["steps"]:
             step_name = step_context["name"]
-
-            if step_name == "validate_7z_arhive":
-                self.logger.debug("TBD")
 
             step_description = step_context.get("description", "<no description>")
 
@@ -254,8 +229,8 @@ class RenderingContextInitializer(object):
 
             for required_secret in required_secrets:
                 if (
-                        ("steps_configuration" in secret_database_context) and
-                        (required_secret in secret_database_context["steps_configuration"])
+                    ("steps_configuration" in secret_database_context) and
+                    (required_secret in secret_database_context["steps_configuration"])
                 ):
                     secret_context = {
                         **secret_context,
@@ -328,6 +303,35 @@ class RenderingContextInitializer(object):
 
         return env
 
+    @staticmethod
+    def _load_yaml_file(file_name, codec="utf-8"):
+        with codecs.open(file_name, "r", codec) as input_file:
+            return safe_load(input_file.read())
+
+    @staticmethod
+    def _get_secrets_file_name(args):
+        secrets_file_name = args.secrets
+        secrets_file_name = os.path.abspath(secrets_file_name)
+        secrets_file_name = os.path.normpath(secrets_file_name)
+
+        return secrets_file_name
+
+    def _init_basic_values(self):
+        res = dict()
+
+        res["main_database_name"] = self.rendering_context.database_name
+        res["week_day_short_name"] = self._backup_start_timestamp.strftime("%a")
+        res["week_number"] = self._backup_start_timestamp.strftime("%U")
+        res["month_short_name"] = self._backup_start_timestamp.strftime("%b")
+        res["backup_start_timestamp"] = self._backup_start_timestamp
+        res["flow_name"] = self.rendering_context.flow_name
+        res["yabtool_exec_folder"] = self.rendering_context.temporary_folder
+        res["current_year"] = self._backup_start_timestamp.date().year
+        res["lower"] = str.lower
+        res["upper"] = str.upper
+
+        return res
+
 
 class YabtoolApplication(object):
     def __init__(self, logger):
@@ -337,14 +341,17 @@ class YabtoolApplication(object):
     def run(self):
         args = get_cli_args()
 
-        context_initializer = RenderingContextInitializer(self.logger)
+        flow_orchestrator = YabtoolFlowOrchestrator(self.logger)
         try:
-            context_initializer.initialize(args)
-            context_initializer.run()
+            flow_orchestrator.initialize(args)
+            flow_orchestrator.run()
         finally:
-            folder_name = context_initializer.rendering_context.temporary_folder
-            if folder_name and os.path.exists(folder_name) and os.path.isdir(folder_name):
-                self.logger.info("going to remove temporary folder: {}".format(folder_name))
-                shutil.rmtree(folder_name)
+            folder_name = flow_orchestrator.rendering_context.temporary_folder
+            if flow_orchestrator.rendering_context.remove_temporary_folder:
+                if folder_name and os.path.exists(folder_name) and os.path.isdir(folder_name):
+                    self.logger.info("going to remove temporary folder: {}".format(folder_name))
+                    shutil.rmtree(folder_name)
+            else:
+                self.logger.info("output folder removal disabled. folder name: '{}'".format(folder_name))
 
         return True
