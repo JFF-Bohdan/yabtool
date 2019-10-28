@@ -40,10 +40,10 @@ class S3FileUpload(BaseFlowStep):
 
         if dry_run:
             self.logger.debug("checking that bucket exists to perform dry run")
-            client.bucket_exists(bucket_name)
+            client.is_bucket_exists(bucket_name)
             return super().run(dry_run)
 
-        if not client.bucket_exists(bucket_name):
+        if not client.is_bucket_exists(bucket_name):
             self.logger.info("creating bucker '{}'".format(bucket_name))
             client.create_bucket(bucket_name, region=region)
 
@@ -150,7 +150,6 @@ class S3FileUpload(BaseFlowStep):
                     bucket_name,
                     dest_key_name
                 )
-
 
     @classmethod
     def step_name(cls):

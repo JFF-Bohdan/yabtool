@@ -65,7 +65,7 @@ class S3BacicBotoClient(object):
     def create_marker_object(self, bucket_name, object_name, object_content="marker_object"):
         self.put_object(bucket_name, object_name, object_content.encode("utf-8"))
 
-    def bucket_exists(self, bucket_name):
+    def is_bucket_exists(self, bucket_name):
         try:
             _ = self._client.head_bucket(Bucket=bucket_name)  # noqa
         except ClientError as e:
