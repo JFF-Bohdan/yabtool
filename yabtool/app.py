@@ -124,6 +124,7 @@ class YabtoolFlowOrchestrator(object):
                 )
             )
 
+        self.logger.debug("loading secrets from: '{}'".format(self.rendering_context.secrets_file_name))
         self.rendering_context.secrets_context = self._load_yaml_file(
             self.rendering_context.secrets_file_name
         )
@@ -311,6 +312,9 @@ class YabtoolFlowOrchestrator(object):
     @staticmethod
     def _get_secrets_file_name(args):
         secrets_file_name = args.secrets
+        if not secrets_file_name:
+            return None
+
         secrets_file_name = os.path.abspath(secrets_file_name)
         secrets_file_name = os.path.normpath(secrets_file_name)
 
