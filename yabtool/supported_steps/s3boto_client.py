@@ -101,6 +101,19 @@ class S3BacicBotoClient(object):
 
         return True
 
+    def copy_file_from_one_bucket_to_another(
+        self,
+        src_bucket_name,
+        src_object_name,
+        dest_bucket_name,
+        dest_object_name,
+    ):
+        copy_source = {
+            "Bucket": src_bucket_name,
+            "Key": src_object_name
+        }
+        self._client.copy(copy_source, dest_bucket_name, dest_object_name)
+
     def put_object(self, dest_bucket_name, dest_object_name, src_data):
         """Add an object to an Amazon S3 bucket
 

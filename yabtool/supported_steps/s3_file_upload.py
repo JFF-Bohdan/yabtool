@@ -8,6 +8,10 @@ from .s3boto_client import S3BacicBotoClient
 
 
 class S3FileUpload(BaseFlowStep):
+    def __init__(self, **kwargs):
+        self._first_uploads_key_name_per_files = {}
+        super().__init__(**kwargs)
+
     def run(self, dry_run=False):
         S3_BUCKET_NAME_REGEX = "^[a-zA-Z0-9.\-_]{1,255}$"
 
@@ -116,16 +120,37 @@ class S3FileUpload(BaseFlowStep):
         for local_file in files_on_local_drive:
             assert os.path.exists(local_file)
 
-            dest_object_name = os.path.join(destination_prefix, os.path.basename(local_file))
-            dest_object_name = str(dest_object_name).replace("\\", "/")
+            dest_key_name = os.path.join(destination_prefix, os.path.basename(local_file))
+            dest_key_name = str(dest_key_name).replace("\\", "/")
 
-            self.logger.info("dest_object_name: '{}'".format(dest_object_name))
+            self.logger.info("dest_key_name: '{}'".format(dest_key_name))
 
-            basic_client.upload_file(
-                bucket_name,
-                dest_object_name,
-                local_file
-            )
+            first_upload_key_name = self._first_uploads_key_name_per_files.get(local_file)
+
+            self.logger.debug("first_upload_key_name: {}".format(first_upload_key_name))
+            if not first_upload_key_name:
+                self.logger.info("no previous uploads available - FRESH UPLOAD")
+                basic_client.upload_file(
+                    bucket_name,
+                    dest_key_name,
+                    local_file
+                )
+                self._first_uploads_key_name_per_files[local_file] = dest_key_name
+            else:
+                self.logger.info(
+                    "previous upload available in key '{}' will COPY to key '{}'".format(
+                        first_upload_key_name,
+                        dest_key_name
+                    )
+                )
+
+                basic_client.copy_file_from_one_bucket_to_another(
+                    bucket_name,
+                    first_upload_key_name,
+                    bucket_name,
+                    dest_key_name
+                )
+
 
     @classmethod
     def step_name(cls):
