@@ -146,6 +146,13 @@ class S3BacicBotoClient(object):
             if need_close:
                 object_data.close()
 
+    def list_files_in_folder(self, bucket_name, folder=""):
+        response = self._client.list_objects(Bucket=bucket_name, Prefix=folder)
+        return [content.get("Key") for content in response.get("Contents", [])]
+
+    def delete_object(self, bucket_name, key):
+        self._client.delete_object(Bucket=bucket_name, Key=key)
+
     def _put_object(self, dest_bucket_name, dest_object_name, object_data):
         # Put the object
         try:

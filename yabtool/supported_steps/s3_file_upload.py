@@ -10,6 +10,7 @@ from .s3boto_client import S3BacicBotoClient
 class S3FileUpload(BaseFlowStep):
     def __init__(self, **kwargs):
         self._first_uploads_key_name_per_files = {}
+        self._already_existing_files_for_rule = []
         super().__init__(**kwargs)
 
     def run(self, dry_run=False):
@@ -48,12 +49,12 @@ class S3FileUpload(BaseFlowStep):
             client.create_bucket(bucket_name, region=region)
 
         real_source_file_names = self._get_real_source_file_names(targets)
-        self.logger.info("going to upload these files:\n\t{}".format("\n\t".format(real_source_file_names)))
+
+        self.logger.info("going to upload these files:\n\t{}".format(real_source_file_names))
 
         for rule in upload_rules:
             self.logger.info("processing upload rule '{}'".format(rule["name"]))
             self._upload_for_rule(
-                dry_run,
                 client,
                 bucket_name,
                 rule,
@@ -74,26 +75,8 @@ class S3FileUpload(BaseFlowStep):
             aws_secret_access_key=self.secret_context["aws_secret_access_key"]
         )
 
-    def _get_real_source_file_names(self, targets):
-        res = list()
-
-        for target in targets:
-            source_file_name = target["source_file"]
-
-            source_file_name = self._render_result(source_file_name)
-            self.logger.debug("source_file: {}".format(source_file_name))
-            if not os.path.exists(source_file_name):
-                msg = "Can't find source file '{}'".format(source_file_name)
-                self.logger.error(msg)
-                raise TransmissionError(msg)
-
-            res.append(source_file_name)
-
-        return res
-
     def _upload_for_rule(
         self,
-        dry_run,
         basic_client,
         bucket_name,
         rule,
@@ -112,10 +95,11 @@ class S3FileUpload(BaseFlowStep):
             self.logger.info("file '{}' already exists in remote bucket, SKIPPING".format(validation_name))
             return
 
-        if dry_run:
-            return
-
-        basic_client.create_marker_object(bucket_name, validation_name)
+        self._already_existing_files_for_rule = self._load_already_existing_files_for_rule(
+            basic_client,
+            bucket_name,
+            destination_prefix
+        )
 
         for local_file in files_on_local_drive:
             assert os.path.exists(local_file)
@@ -125,11 +109,13 @@ class S3FileUpload(BaseFlowStep):
 
             self.logger.info("dest_key_name: '{}'".format(dest_key_name))
 
-            first_upload_key_name = self._first_uploads_key_name_per_files.get(local_file)
+            first_upload_key_name = self._first_uploads_key_name_per_files.get(local_file, None)
+            self.logger.debug("first_upload_key_name: '{}' for file '{}'".format(first_upload_key_name, local_file))
 
-            self.logger.debug("first_upload_key_name: {}".format(first_upload_key_name))
             if not first_upload_key_name:
                 self.logger.info("no previous uploads available - FRESH UPLOAD")
+                self.logger.info("bucket_name: '{}', dest_key_name: '{}'".format(bucket_name, dest_key_name))
+
                 basic_client.upload_file(
                     bucket_name,
                     dest_key_name,
@@ -150,6 +136,44 @@ class S3FileUpload(BaseFlowStep):
                     bucket_name,
                     dest_key_name
                 )
+
+            if dest_key_name in self._already_existing_files_for_rule:
+                self._already_existing_files_for_rule.remove(dest_key_name)
+
+        self._remove_files_existing_for_rule(basic_client, bucket_name, destination_prefix)
+        basic_client.create_marker_object(bucket_name, validation_name)
+
+    def _load_already_existing_files_for_rule(self, basic_client, bucket_name, destination_prefix):
+        self.logger.debug("checking for files that already exists in bucket")
+        existing_files_for_rule = basic_client.list_files_in_folder(bucket_name, destination_prefix)
+        self.logger.debug("existing_files_for_rule: {}".format(existing_files_for_rule))
+
+        return existing_files_for_rule
+
+    def _remove_files_existing_for_rule(self, basic_client, bucket_name, destination_prefix):
+        existing_files_base_names = [os.path.basename(item) for item in self._already_existing_files_for_rule]
+        self.logger.info("some files already exists in folder for rule: {}".format(existing_files_base_names))
+
+        for existing_file in self._already_existing_files_for_rule:
+            self.logger.info("removing item '{}'".format(existing_file))
+            basic_client.delete_object(bucket_name, existing_file)
+
+    def _get_real_source_file_names(self, targets):
+        res = list()
+
+        for target in targets:
+            source_file_name = target["source_file"]
+
+            source_file_name = self._render_result(source_file_name)
+            self.logger.debug("source_file: {}".format(source_file_name))
+            if not os.path.exists(source_file_name):
+                msg = "Can't find source file '{}'".format(source_file_name)
+                self.logger.error(msg)
+                raise TransmissionError(msg)
+
+            res.append(source_file_name)
+
+        return res
 
     @classmethod
     def step_name(cls):
