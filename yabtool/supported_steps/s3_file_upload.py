@@ -14,7 +14,7 @@ class S3FileUpload(BaseFlowStep):
         super().__init__(**kwargs)
 
     def run(self, dry_run=False):
-        S3_BUCKET_NAME_REGEX = "^[a-zA-Z0-9.\-_]{1,255}$"
+        S3_BUCKET_NAME_REGEX = r"^[a-zA-Z0-9.\-_]{1,255}$"
 
         self.logger.debug("self.secret_context: {}".format(self.secret_context))
 

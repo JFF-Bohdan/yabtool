@@ -1,6 +1,9 @@
 import string
 
-import secrets
+try:
+    import secrets
+except ImportError:
+    import random as secrets
 
 
 def gen_password(length=20, alphabet=None):
