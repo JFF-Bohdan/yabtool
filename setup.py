@@ -1,11 +1,10 @@
-from setuptools import find_packages, setup
-
-from yabtool import __version__
+from setuptools import find_packages, setup  # noqa
+from yabtool import __version__  # noqa
 
 try:  # for pip >= 10
-    from pip._internal.req import parse_requirements
+    from pip._internal.req import parse_requirements  # noqa
 except ImportError:  # for pip <= 9.0.3
-    from pip.req import parse_requirements
+    from pip.req import parse_requirements  # noqa
 
 
 PACKAGE_NAME = "yabtool"

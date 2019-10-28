@@ -6,9 +6,7 @@ import shutil
 import uuid
 
 from jinja2 import BaseLoader, Environment, StrictUndefined
-
 from yabtool.version import __version__
-
 from yaml import safe_load
 
 from .supported_steps import create_steps_factory
@@ -230,7 +228,7 @@ class YabtoolFlowOrchestrator(object):
 
             for required_secret in required_secrets:
                 if (
-                    ("steps_configuration" in secret_database_context) and
+                    ("steps_configuration" in secret_database_context) and  # noqa
                     (required_secret in secret_database_context["steps_configuration"])
                 ):
                     secret_context = {
