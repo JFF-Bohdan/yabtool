@@ -48,17 +48,22 @@ flows:
         database_prefix_in_bucket: "backups/{{main_database_name}}"
         source_files:
           - source_file: "{{output_archive_name}}"
+            add_dedup_tag: true
           - source_file: "{{output_archive_hash_file_name}}"
+            add_dedup_tag: false
         upload_rules:
           - name: "weekdays"
             description: "upload for week day name, one per each weekday"
             destination_prefix: "{{database_prefix_in_bucket}}/weekdays/{{week_day_short_name | lower}}"
-            validation_name: "flag_{{week_day_short_name | lower}}_{{main_database_name | lower}}.{{output_archive_extension | lower}}"
+            dedup_tag_name: "flag_{{week_day_short_name | lower}}_{{main_database_name | lower}}.{{output_archive_extension | lower}}"
+            dedup_tag_value: "flag used to prevent from transmission of same file"
           - name: "weekly"
             description: "upload per week number in year"
             destination_prefix: "{{database_prefix_in_bucket}}/weeks/{{week_number}}"
-            validation_name: "flag_{{current_year}}_{{week_number}}_{{main_database_name}}.{{output_archive_extension}}"
+            dedup_tag_name: "flag_{{current_year}}_{{week_number}}_{{main_database_name}}.{{output_archive_extension}}"
+            dedup_tag_value: "flag used to prevent from transmission of same file"
           - name: "monthly"
             description: "upload per month name"
-            destination_prefix: "{{database_prefix_in_bucket}}/monthly/{{current_year}}/{{month_short_name | lower}}"
-            validation_name: "flag_{{current_year}}_{{month_short_name | lower}}_{{main_database_name}}.{{output_archive_extension}}"
+            destination_prefix: "{{database_prefix_in_bucket}}/monthly/{{current_year}}/{{month_two_digit_number}}-{{month_short_name | lower}}"
+            dedup_tag_name: "flag_{{current_year}}_{{month_short_name | lower}}_{{main_database_name}}.{{output_archive_extension}}"
+            dedup_tag_value: "flag used to prevent from transmission of same file"

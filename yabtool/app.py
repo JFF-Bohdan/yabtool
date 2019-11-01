@@ -325,6 +325,7 @@ class YabtoolFlowOrchestrator(object):
         res["week_day_short_name"] = self._backup_start_timestamp.strftime("%a")
         res["week_number"] = self._backup_start_timestamp.strftime("%U")
         res["month_short_name"] = self._backup_start_timestamp.strftime("%b")
+        res["month_two_digit_number"] = self._backup_start_timestamp.strftime("%m")
         res["backup_start_timestamp"] = self._backup_start_timestamp
         res["flow_name"] = self.rendering_context.flow_name
         res["yabtool_exec_folder"] = self.rendering_context.temporary_folder

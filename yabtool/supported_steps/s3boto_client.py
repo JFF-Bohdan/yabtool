@@ -62,9 +62,6 @@ class S3BacicBotoClient(object):
 
         return True
 
-    def create_marker_object(self, bucket_name, object_name, object_content="marker_object"):
-        self.put_object(bucket_name, object_name, object_content.encode("utf-8"))
-
     def is_bucket_exists(self, bucket_name):
         try:
             _ = self._client.head_bucket(Bucket=bucket_name)  # noqa
@@ -152,6 +149,26 @@ class S3BacicBotoClient(object):
 
     def delete_object(self, bucket_name, key):
         self._client.delete_object(Bucket=bucket_name, Key=key)
+
+    def get_object_tags(self, bucket_name, key):
+        ret = {}
+
+        resp = self._client.get_object_tagging(Bucket=bucket_name, Key=key)
+        if "TagSet" not in resp:
+            return ret
+
+        tags_set = resp["TagSet"]
+        for tags_set_item in tags_set:
+            ret[tags_set_item["Key"]] = tags_set_item["Value"]
+
+        return ret
+
+    def set_object_tags(self, bucket_name, key, tags):
+        tags_list = [{"Key": str(key), "Value": str(value)} for key, value in tags.items()]
+        self._client.put_object_tagging(Bucket=bucket_name, Key=key, Tagging={"TagSet": tags_list})
+
+    def delete_object_tags(self, bucket_name, key):
+        self._client.get_object_tagging(Bucket=bucket_name, Key=key)
 
     def _put_object(self, dest_bucket_name, dest_object_name, object_data):
         # Put the object
