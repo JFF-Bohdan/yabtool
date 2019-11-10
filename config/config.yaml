@@ -1,5 +1,5 @@
 parameters:
-  remove_temporary_folder: true
+  remove_temporary_folder: false
   perform_dry_run: true
 
 flows:
@@ -9,14 +9,14 @@ flows:
     steps:
       - name: "mkdir_for_backup"
         description: "Makes directory for backup output"
-        generation_mask: "{{yabtool_exec_folder}}/{{main_database_name}}/{{backup_start_timestamp|extract_year_four_digits}}-{{backup_start_timestamp|extract_month_two_digits}}-{{backup_start_timestamp|extract_day_two_digits}}_{{main_database_name}}_backup"
+        generation_mask: "{{yabtool_exec_folder}}/{{main_target_name}}/{{backup_start_timestamp|extract_year_four_digits}}-{{backup_start_timestamp|extract_month_two_digits}}-{{backup_start_timestamp|extract_day_two_digits}}_{{main_target_name}}_backup"
         generates:
           output_folder_name: "{{result}}"
       - name: "firebird_backup"
 #        command_template: "gbak -backup_database -user {{user_name}} -password {{password}} -verbose -y {{output_folder_name}}/{{backup_log_name}} {{database_host}}:{{database_path}} {{output_folder_name}}/{{backup_file_name}}"
         command_template: "gbak -backup_database -user {{user_name}} -password {{password}} -metadata -verbose -y {{output_folder_name}}/{{backup_log_name}} {{database_host}}:{{database_path}} {{output_folder_name}}/{{backup_file_name}}"
         backup_log_name: "backup.log"
-        backup_file_name: "{{main_database_name}}.fbk"
+        backup_file_name: "{{main_target_name}}.fbk"
         dry_run_command: "gbak -z"
         generates:
           backup_file_name: "{{backup_file_name}}"
@@ -45,7 +45,7 @@ flows:
         relative_secrets:
           - 7z_compress
       - name: "s3_multipart_upload"
-        database_prefix_in_bucket: "backups/{{main_database_name}}"
+        target_prefix_in_bucket: "{{prefix_in_bucket}}{{main_target_name}}"
         source_files:
           - source_file: "{{output_archive_name}}"
             add_dedup_tag: true
@@ -54,16 +54,16 @@ flows:
         upload_rules:
           - name: "weekdays"
             description: "upload for week day name, one per each weekday"
-            destination_prefix: "{{database_prefix_in_bucket}}/weekdays/{{week_day_short_name | lower}}"
-            dedup_tag_name: "flag_{{week_day_short_name | lower}}_{{main_database_name | lower}}.{{output_archive_extension | lower}}"
+            destination_prefix: "{{target_prefix_in_bucket}}/weekdays/{{week_day_short_name | lower}}"
+            dedup_tag_name: "flag_{{week_day_short_name | lower}}_{{main_target_name | lower}}.{{output_archive_extension | lower}}"
             dedup_tag_value: "flag used to prevent from transmission of same file"
           - name: "weekly"
             description: "upload per week number in year"
-            destination_prefix: "{{database_prefix_in_bucket}}/weeks/{{week_number}}"
-            dedup_tag_name: "flag_{{current_year}}_{{week_number}}_{{main_database_name}}.{{output_archive_extension}}"
+            destination_prefix: "{{target_prefix_in_bucket}}/weeks/{{week_number}}"
+            dedup_tag_name: "flag_{{current_year}}_{{week_number}}_{{main_target_name}}.{{output_archive_extension}}"
             dedup_tag_value: "flag used to prevent from transmission of same file"
           - name: "monthly"
             description: "upload per month name"
-            destination_prefix: "{{database_prefix_in_bucket}}/monthly/{{current_year}}/{{month_two_digit_number}}-{{month_short_name | lower}}"
-            dedup_tag_name: "flag_{{current_year}}_{{month_short_name | lower}}_{{main_database_name}}.{{output_archive_extension}}"
+            destination_prefix: "{{target_prefix_in_bucket}}/monthly/{{month_two_digit_number}}-{{month_short_name | lower}}"
+            dedup_tag_name: "flag_{{month_short_name | lower}}_{{main_target_name}}.{{output_archive_extension}}"
             dedup_tag_value: "flag used to prevent from transmission of same file"

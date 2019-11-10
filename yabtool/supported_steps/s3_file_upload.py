@@ -47,12 +47,12 @@ class S3FileUpload(BaseFlowStep):
         raw_client = self._crete_s3_client()
         client = S3BacicBotoClient(self.logger, raw_client)
 
-        database_prefix_in_bucket = self._render_parameter("database_prefix_in_bucket")
-        self.logger.debug("database_prefix_in_bucket: '{}'".format(database_prefix_in_bucket))
+        target_prefix_in_bucket = self._render_parameter("target_prefix_in_bucket")
+        self.logger.debug("target_prefix_in_bucket: '{}'".format(target_prefix_in_bucket))
 
         targets = self._get_upload_targets()
 
-        additional_context = {"database_prefix_in_bucket": database_prefix_in_bucket}
+        additional_context = {"target_prefix_in_bucket": target_prefix_in_bucket}
         upload_rules = self.mixed_context["upload_rules"]
 
         if dry_run:

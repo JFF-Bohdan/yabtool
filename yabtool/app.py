@@ -3,9 +3,12 @@ import codecs
 import datetime
 import os
 import shutil
+import sys
 import uuid
 
 from jinja2 import BaseLoader, Environment, StrictUndefined
+import loguru
+from loguru._defaults import LOGURU_FORMAT
 from yabtool.version import __version__
 from yaml import safe_load
 
@@ -29,10 +32,12 @@ def get_cli_args():
     parser.add_argument(
         "--version", "-v", action="version", version="%(prog)s {}".format(__version__)
     )
+    parser.add_argument("--log-level", "-l", action="store", default="DEBUG")
     parser.add_argument("--secrets", "-s", action="store")
     parser.add_argument("--config", "-c", action="store")
-    parser.add_argument("--database", "-d", action="store")
-    parser.add_argument("--temporary_folder", "-t", action="store")
+    parser.add_argument("--dry-run", "-y", action="store_true", default=False)
+    parser.add_argument("--target", "-d", action="store")
+    parser.add_argument("--temporary-folder", "-t", action="store")
     parser.add_argument("--flow", "-f", action="store")
 
     return parser.parse_args()
@@ -57,7 +62,7 @@ class RenderingContext(object):
 
         self.config_context = dict()
         self.secrets_context = dict()
-        self.database_name = None
+        self.target_name = None
         self.flow_name = None
 
         self.basic_values = dict()
@@ -112,7 +117,7 @@ class YabtoolFlowOrchestrator(object):
         self.rendering_context.secrets_file_name = self._get_secrets_file_name(args)
         if not self.rendering_context.secrets_file_name:
             raise ConfigurationValidationException(
-                "Secrets file path doesn't specified"
+                "Secrets file is not specified"
             )
 
         if not os.path.exists(self.rendering_context.secrets_file_name):
@@ -127,9 +132,9 @@ class YabtoolFlowOrchestrator(object):
             self.rendering_context.secrets_file_name
         )
 
-        self.rendering_context.database_name = self._get_database_name(args)
+        self.rendering_context.target_name = self._get_target_name(args)
         self.logger.debug(
-            "database_name: '{}'".format(self.rendering_context.database_name)
+            "target_name: '{}'".format(self.rendering_context.target_name)
         )
 
         self.rendering_context.flow_name = self._get_flow_name(args)
@@ -162,7 +167,7 @@ class YabtoolFlowOrchestrator(object):
         return True
 
     def run(self):
-        self.logger.warning("performing active run")
+        self.logger.info("performing active run")
         self._run(dry_run=False)
 
     def _get_config_file_name(self, args):
@@ -197,8 +202,8 @@ class YabtoolFlowOrchestrator(object):
         self.rendering_context.previous_steps_values = list()
 
         rendering_environment = self._create_rendering_environment()
-        secret_database_context = self.rendering_context.secrets_context["databases"][
-            self.rendering_context.database_name
+        secret_targets_context = self.rendering_context.secrets_context["targets"][
+            self.rendering_context.target_name
         ]
 
         assert self._steps_factory
@@ -228,12 +233,12 @@ class YabtoolFlowOrchestrator(object):
 
             for required_secret in required_secrets:
                 if (
-                    ("steps_configuration" in secret_database_context) and  # noqa
-                    (required_secret in secret_database_context["steps_configuration"])
+                    ("steps_configuration" in secret_targets_context) and  # noqa
+                    (required_secret in secret_targets_context["steps_configuration"])
                 ):
                     secret_context = {
                         **secret_context,
-                        **secret_database_context["steps_configuration"][required_secret]
+                        **secret_targets_context["steps_configuration"][required_secret]
                     }
 
             step_object = self._steps_factory.create_object(
@@ -255,25 +260,25 @@ class YabtoolFlowOrchestrator(object):
 
             self.rendering_context.previous_steps_values.append(additional_variables)
 
-    def _get_database_name(self, args):
-        if args.database:
-            return args.database
+    def _get_target_name(self, args):
+        if args.target:
+            return args.target
 
         assert self.rendering_context.secrets_context
 
-        return self.rendering_context.secrets_context["defaults"]["database"]
+        return self.rendering_context.secrets_context["defaults"]["target"]
 
     def _get_flow_name(self, args):
         if args.flow:
             return args.flow
 
         assert self.rendering_context.secrets_context
-        assert self.rendering_context.database_name
+        assert self.rendering_context.target_name
 
-        database_context = self.rendering_context.secrets_context["databases"][
-            self.rendering_context.database_name
+        targets_context = self.rendering_context.secrets_context["targets"][
+            self.rendering_context.target_name
         ]
-        return database_context["flow_type"]
+        return targets_context["flow_type"]
 
     def _get_temporary_folder(self, args):
         if args.temporary_folder:
@@ -321,7 +326,7 @@ class YabtoolFlowOrchestrator(object):
     def _init_basic_values(self):
         res = dict()
 
-        res["main_database_name"] = self.rendering_context.database_name
+        res["main_target_name"] = self.rendering_context.target_name
         res["week_day_short_name"] = self._backup_start_timestamp.strftime("%a")
         res["week_number"] = self._backup_start_timestamp.strftime("%U")
         res["month_short_name"] = self._backup_start_timestamp.strftime("%b")
@@ -337,17 +342,25 @@ class YabtoolFlowOrchestrator(object):
 
 
 class YabtoolApplication(object):
-    def __init__(self, logger):
-        self.logger = logger
+    def __init__(self):
+        self.logger = None
         self.rendering_context = None
 
     def run(self):
         args = get_cli_args()
+        self._initializ_logger(args)
 
         flow_orchestrator = YabtoolFlowOrchestrator(self.logger)
+
         try:
             flow_orchestrator.initialize(args)
-            flow_orchestrator.run()
+            flow_name = flow_orchestrator.rendering_context.flow_name
+
+            if not args.dry_run:
+                self.logger.info("flow '{}' started".format(flow_name))
+                flow_orchestrator.run()
+            else:
+                self.logger.info("dry run for flow '{}' performed, cleaning up".format(flow_name))
         finally:
             folder_name = flow_orchestrator.rendering_context.temporary_folder
             if flow_orchestrator.rendering_context.remove_temporary_folder:
@@ -358,3 +371,8 @@ class YabtoolApplication(object):
                 self.logger.info("output folder removal disabled. folder name: '{}'".format(folder_name))
 
         return True
+
+    def _initializ_logger(self, args):
+        self.logger = loguru.logger
+        self.logger.remove()
+        self.logger.add(sys.stdout, format=LOGURU_FORMAT, level=args.log_level)

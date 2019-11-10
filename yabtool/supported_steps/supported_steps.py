@@ -13,7 +13,12 @@ class FileUploadingError(BaseException):
 class ThirdPartyCommandsExecutor(object):
     @staticmethod
     def execute(command):
-        return subprocess.run(command, stdout=subprocess.PIPE, stdin=subprocess.PIPE)
+        result = subprocess.run(command, stdout=subprocess.PIPE, stdin=subprocess.PIPE)
+
+        result.stdout = result.stdout if result.stdout is not None else bytes()
+        result.stderr = result.stderr if result.stderr is not None else bytes()
+
+        return result
 
 
 class MakeDirectoryForBackup(BaseFlowStep):
@@ -49,10 +54,11 @@ class MakeFirebirdDatabaseBackup(BaseFlowStep):
         self.step_context["dry_run_command"] = dry_run_command
 
         if not dry_run:
-            self.logger.info("going to execute: {}".format(command))
+            self.logger.info("Making backup of Firebird database")
+            self.logger.debug("going to execute: {}".format(command))
             result = ThirdPartyCommandsExecutor.execute(command)
         else:
-            self.logger.info("going to execute: {}".format(dry_run_command))
+            self.logger.debug("going to execute: {}".format(dry_run_command))
             result = ThirdPartyCommandsExecutor.execute(dry_run_command)
 
         if not dry_run:
@@ -124,15 +130,18 @@ class CompressFileWithSevenZ(BaseFlowStep):
         self.step_context["dry_run_command"] = dry_run_command
 
         if not dry_run:
-            self.logger.info("going to execute: {}".format(command))
+            self.logger.info("Compressing file with 7Z archive")
+            self.logger.debug("going to execute: {}".format(command))
             result = ThirdPartyCommandsExecutor.execute(command)
         else:
-            self.logger.info("going to execute: {}".format(dry_run_command))
+            self.logger.debug("going to execute: {}".format(dry_run_command))
             result = ThirdPartyCommandsExecutor.execute(dry_run_command)
 
         self.logger.info("returncode: {}".format(result.returncode))
-        self.logger.info("stderr: {}".format(result.stderr))
-        self.logger.info("stdout: {}".format(result.stdout))
+
+        if not dry_run:
+            self.logger.info("stderr:\n{}".format(result.stderr.decode("utf-8")))
+            self.logger.info("stdout:\n{}".format(result.stdout.decode("utf-8")))
 
         if not dry_run:
             result.check_returncode()
@@ -154,15 +163,18 @@ class Validate7ZArchive(BaseFlowStep):
         self.step_context["dry_run_command"] = dry_run_command
 
         if not dry_run:
-            self.logger.info("going to execute: {}".format(command))
+            self.logger.info("Validating 7Z archive")
+            self.logger.debug("going to execute: {}".format(command))
             result = ThirdPartyCommandsExecutor.execute(command)
         else:
-            self.logger.info("going to execute: {}".format(dry_run_command))
+            self.logger.debug("going to execute: {}".format(dry_run_command))
             result = ThirdPartyCommandsExecutor.execute(dry_run_command)
 
         self.logger.info("returncode: {}".format(result.returncode))
-        self.logger.info("stderr: {}".format(result.stderr))
-        self.logger.info("stdout: {}".format(result.stdout))
+
+        if not dry_run:
+            self.logger.info("stderr:\n{}".format(result.stderr.decode("utf-8")))
+            self.logger.info("stdout:\n{}".format(result.stdout.decode("utf-8")))
 
         if not dry_run:
             result.check_returncode()
