@@ -1,5 +1,5 @@
 parameters:
-  remove_temporary_folder: false
+  remove_temporary_folder: true
   perform_dry_run: true
 
 flows:
@@ -13,8 +13,7 @@ flows:
         generates:
           output_folder_name: "{{result}}"
       - name: "firebird_backup"
-#        command_template: "gbak -backup_database -user {{user_name}} -password {{password}} -verbose -y {{output_folder_name}}/{{backup_log_name}} {{database_host}}:{{database_path}} {{output_folder_name}}/{{backup_file_name}}"
-        command_template: "gbak -backup_database -user {{user_name}} -password {{password}} -metadata -verbose -y {{output_folder_name}}/{{backup_log_name}} {{database_host}}:{{database_path}} {{output_folder_name}}/{{backup_file_name}}"
+        command_template: "gbak -backup_database -user {{user_name}} -password {{password}} -verbose -y {{output_folder_name}}/{{backup_log_name}} {{database_host}}:{{database_path}} {{output_folder_name}}/{{backup_file_name}}"
         backup_log_name: "backup.log"
         backup_file_name: "{{main_target_name}}.fbk"
         dry_run_command: "gbak -z"
