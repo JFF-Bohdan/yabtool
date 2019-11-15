@@ -1,5 +1,6 @@
 import argparse
 import codecs
+import copy
 import datetime
 import os
 import shutil
@@ -30,17 +31,60 @@ def get_cli_args():
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "--version", "-v", action="version", version="%(prog)s {}".format(__version__)
+        "--version",
+        "-v",
+        action="version",
+        version="%(prog)s {}".format(__version__)
     )
-    parser.add_argument("--log-level", "-l", action="store", default="DEBUG")
-    parser.add_argument("--secrets", "-s", action="store")
-    parser.add_argument("--config", "-c", action="store")
-    parser.add_argument("--dry-run", "-y", action="store_true", default=False)
-    parser.add_argument("--target", "-d", action="store")
-    parser.add_argument("--temporary-folder", "-t", action="store")
+
+    parser.add_argument(
+        "--log-level",
+        "-l",
+        action="store",
+        default="DEBUG",
+        help="Specify log level (DEBUG, INFO, ...)"
+    )
+
+    parser.add_argument(
+        "--secrets",
+        "-s",
+        action="store",
+        help="Path to file with secrets"
+    )
+
+    parser.add_argument(
+        "--config",
+        "-c",
+        action="store",
+        help="Path to main configuration file"
+    )
+
+    parser.add_argument(
+        "--dry-run",
+        "-y",
+        action="store_true",
+        default=None,
+        help="Perform dry run only"
+    )
+
+    parser.add_argument(
+        "--target",
+        "-d",
+        action="store",
+        help="Specify target in secret file (overrides default in secrets file if specified)"
+    )
+
+    parser.add_argument(
+        "--temporary-folder",
+        "-t",
+        action="store",
+        help="Path to temporary folder that will be used by yabtool"
+    )
+
+    # TODO: check that we really need ability to specify flow in command line
     parser.add_argument("--flow", "-f", action="store")
 
-    return parser.parse_args()
+    return parser.parse_known_args()
 
 
 def jinja2_custom_filter_extract_year_four_digits(value):
@@ -71,6 +115,7 @@ class RenderingContext(object):
 
         self.remove_temporary_folder = None
         self.perform_dry_run = None
+        self.unknown_args = None
 
     def to_context(self):
         res = self.basic_values
@@ -91,11 +136,13 @@ class YabtoolFlowOrchestrator(object):
         self._steps_factory = None
         self._backup_start_timestamp = datetime.datetime.utcnow()
 
-    def initialize(self, args):
+    def initialize(self, args, unknown_args):
+        self.rendering_context.unknown_args = unknown_args
         self.rendering_context.config_file_name = self._get_config_file_name(args)
         self.logger.debug(
             "config_file_name: '{}'".format(self.rendering_context.config_file_name)
         )
+
         if not self.rendering_context.config_file_name:
             raise ConfigurationValidationException("No configuration file specified")
 
@@ -109,10 +156,6 @@ class YabtoolFlowOrchestrator(object):
         self.rendering_context.config_context = self._load_yaml_file(
             self.rendering_context.config_file_name
         )
-
-        config_context = self.rendering_context.config_context
-        self.rendering_context.remove_temporary_folder = config_context["parameters"]["remove_temporary_folder"]
-        self.rendering_context.perform_dry_run = config_context["parameters"]["perform_dry_run"]
 
         self.rendering_context.secrets_file_name = self._get_secrets_file_name(args)
         if not self.rendering_context.secrets_file_name:
@@ -133,12 +176,15 @@ class YabtoolFlowOrchestrator(object):
         )
 
         self.rendering_context.target_name = self._get_target_name(args)
-        self.logger.debug(
-            "target_name: '{}'".format(self.rendering_context.target_name)
-        )
+        self.logger.debug("target_name: '{}'".format(self.target_name))
 
         self.rendering_context.flow_name = self._get_flow_name(args)
         self.logger.debug("flow_name: '{}'".format(self.rendering_context.flow_name))
+
+        self._override_config_parameters_with_secrets()
+
+        self.rendering_context.remove_temporary_folder = self.config_context["parameters"]["remove_temporary_folder"]
+        self.rendering_context.perform_dry_run = self.config_context["parameters"]["perform_dry_run"] or args.dry_run
 
         self.rendering_context.temporary_folder = self._get_temporary_folder(args)
 
@@ -192,9 +238,7 @@ class YabtoolFlowOrchestrator(object):
     def _run(self, dry_run):
         assert self.rendering_context.flow_name
 
-        flow_data = self.rendering_context.config_context["flows"][
-            self.rendering_context.flow_name
-        ]
+        flow_data = self.rendering_context.config_context["flows"][self.flow_name]
         flow_description = flow_data["description"]
 
         self.logger.info("flow_description: '{}'".format(flow_description))
@@ -202,9 +246,7 @@ class YabtoolFlowOrchestrator(object):
         self.rendering_context.previous_steps_values = list()
 
         rendering_environment = self._create_rendering_environment()
-        secret_targets_context = self.rendering_context.secrets_context["targets"][
-            self.rendering_context.target_name
-        ]
+        secret_targets_context = self.rendering_context.secrets_context["targets"][self.target_name]
 
         assert self._steps_factory
         for step_context in flow_data["steps"]:
@@ -280,6 +322,51 @@ class YabtoolFlowOrchestrator(object):
         ]
         return targets_context["flow_type"]
 
+    def _override_config_parameters_with_secrets(self):
+        if "parameters" in self.secrets_context:
+            override_params = self.secrets_context["parameters"]
+            for key, value in override_params.items():
+                self.config_context["parameters"][key] = value
+
+        secret_targets_context = self.secrets_context["targets"][self.target_name]
+        if "config_patch" in secret_targets_context:
+            config_patch = secret_targets_context["config_patch"]
+
+            patched_steps_count = 0
+            for step_patch in config_patch["steps"]:
+                step_patch_data = copy.deepcopy(step_patch)
+                self.logger.debug("step_patch_data: {}".format(step_patch_data))
+                del step_patch_data["name"]
+
+                patched_steps_count += self._patch_step_in_flow(step_patch["name"], step_patch_data)
+
+            if patched_steps_count:
+                flow_data = self.rendering_context.config_context["flows"][self.flow_name]
+                self.logger.debug("flow_data:\n{}".format(flow_data))
+
+    def _patch_step_in_flow(self, step_name, step_patch_data):
+        flow_data = self.rendering_context.config_context["flows"][self.flow_name]
+        flow_steps = flow_data["steps"]
+
+        patched_steps_count = 0
+        flow_steps_count = len(flow_steps)
+        for index in range(flow_steps_count):
+            flow_step = flow_steps[index]
+            if flow_step["name"] != step_name:
+                continue
+
+            self.logger.warning(
+                "patching step '{}' for flow '{}' with:\n{}".format(
+                    step_name,
+                    self.flow_name,
+                    step_patch_data
+                )
+            )
+            flow_steps[index] = {**flow_step, **step_patch_data}
+            patched_steps_count += 1
+
+        return patched_steps_count
+
     def _get_temporary_folder(self, args):
         if args.temporary_folder:
             return args.temporary_folder
@@ -332,13 +419,29 @@ class YabtoolFlowOrchestrator(object):
         res["month_short_name"] = self._backup_start_timestamp.strftime("%b")
         res["month_two_digit_number"] = self._backup_start_timestamp.strftime("%m")
         res["backup_start_timestamp"] = self._backup_start_timestamp
-        res["flow_name"] = self.rendering_context.flow_name
+        res["flow_name"] = self.flow_name
         res["yabtool_exec_folder"] = self.rendering_context.temporary_folder
         res["current_year"] = self._backup_start_timestamp.date().year
         res["lower"] = str.lower
         res["upper"] = str.upper
 
         return res
+
+    @property
+    def config_context(self):
+        return self.rendering_context.config_context
+
+    @property
+    def secrets_context(self):
+        return self.rendering_context.secrets_context
+
+    @property
+    def flow_name(self):
+        return self.rendering_context.flow_name
+
+    @property
+    def target_name(self):
+        return self.rendering_context.target_name
 
 
 class YabtoolApplication(object):
@@ -347,14 +450,15 @@ class YabtoolApplication(object):
         self.rendering_context = None
 
     def run(self):
-        args = get_cli_args()
-        self._initializ_logger(args)
+        args, unknown_args = get_cli_args()
+        self._initialize_logger(args)
+        self.logger.debug("unknown command line arguments: {}".format(unknown_args))
 
         flow_orchestrator = YabtoolFlowOrchestrator(self.logger)
 
         try:
-            flow_orchestrator.initialize(args)
-            flow_name = flow_orchestrator.rendering_context.flow_name
+            flow_orchestrator.initialize(args, unknown_args)
+            flow_name = flow_orchestrator.flow_name
 
             if not args.dry_run:
                 self.logger.info("flow '{}' started".format(flow_name))
@@ -372,7 +476,7 @@ class YabtoolApplication(object):
 
         return True
 
-    def _initializ_logger(self, args):
+    def _initialize_logger(self, args):
         self.logger = loguru.logger
         self.logger.remove()
         self.logger.add(sys.stdout, format=LOGURU_FORMAT, level=args.log_level)
