@@ -1,4 +1,8 @@
 from .factory import create_steps_factory
-from .s3_file_upload import S3FileUpload
-from .supported_steps import CalculateFileHashAndSaveToFile, CompressFileWithSevenZ, MakeDirectoryForBackup, \
-    MakeFirebirdDatabaseBackup, Validate7ZArchive
+
+from .step_calculate_file_hash_and_save_to_file import StepCalculateFileHashAndSaveToFile
+from .step_compress_file_with_7z import StepCompressFileWith7Z
+from .step_make_directory_for_backup import StepMakeDirectoryForBackup
+from .step_make_firebird_database_backup import StepMakeFirebirdDatabaseBackup
+from .step_s3_file_upload import StepS3FileUpload
+from .step_validate_7z_archive import StepValidate7ZArchive

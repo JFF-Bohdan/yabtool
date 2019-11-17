@@ -22,7 +22,7 @@ class UploadTarget(object):
         return self.__repr__()
 
 
-class S3FileUpload(BaseFlowStep):
+class StepS3FileUpload(BaseFlowStep):
     S3_BUCKET_NAME_REGEX = r"^[a-zA-Z0-9.\-_]{1,255}$"
 
     def __init__(self, **kwargs):
@@ -36,10 +36,10 @@ class S3FileUpload(BaseFlowStep):
         self.logger.debug("bucket_name: '{}'".format(bucket_name))
 
         if dry_run:
-            pattern = re.compile(S3FileUpload.S3_BUCKET_NAME_REGEX)
+            pattern = re.compile(StepS3FileUpload.S3_BUCKET_NAME_REGEX)
             if not pattern.match(bucket_name):
                 raise DryRunExecutionError(
-                    "base bucket name should match regex '{}'".format(S3FileUpload.S3_BUCKET_NAME_REGEX)
+                    "base bucket name should match regex '{}'".format(StepS3FileUpload.S3_BUCKET_NAME_REGEX)
                 )
 
         region = self.secret_context["region"]
