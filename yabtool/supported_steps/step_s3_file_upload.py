@@ -29,6 +29,37 @@ class StepS3FileUpload(BaseFlowStep):
         self._first_uploads_key_name_per_files = {}
         super().__init__(**kwargs)
 
+    def vote_for_flow_execution_skipping(self):
+        self.logger.debug("checking if need skip flow execution for step '{}'".format(self.step_name))
+
+        bucket_name = self.secret_context["bucket_name"]
+        self.logger.debug("bucket_name: '{}'".format(bucket_name))
+
+        raw_client = self._crete_s3_client()
+        client = S3BasicBotoClient(self.logger, raw_client)
+
+        target_prefix_in_bucket = self._render_parameter("target_prefix_in_bucket")
+        self.logger.debug("target_prefix_in_bucket: '{}'".format(target_prefix_in_bucket))
+
+        additional_context = {"target_prefix_in_bucket": target_prefix_in_bucket}
+        upload_rules = self.mixed_context["upload_rules"]
+
+        if not client.is_bucket_exists(bucket_name):
+            self.logger.debug("Step can't be skipped, because bucket is not exists")
+            return False
+
+        for rule in upload_rules:
+            self.logger.info("processing upload rule '{}'".format(rule["name"]))
+
+            self._can_skip_execution_for_rule(
+                client,
+                bucket_name,
+                rule,
+                additional_context
+            )
+
+        return True
+
     def run(self, dry_run=False):
         self.logger.debug("self.secret_context: {}".format(self.secret_context))
 
@@ -103,6 +134,32 @@ class StepS3FileUpload(BaseFlowStep):
             aws_access_key_id=self.secret_context["aws_access_key_id"],
             aws_secret_access_key=self.secret_context["aws_secret_access_key"]
         )
+
+    def _can_skip_execution_for_rule(
+        self,
+        basic_client,
+        bucket_name,
+        rule,
+        additional_context=None
+    ):
+        destination_prefix = self._render_result(rule["destination_prefix"], additional_context)
+        self.logger.debug("destination_prefix: '{}'".format(destination_prefix))
+
+        dedup_tag_name = self._render_result(rule["dedup_tag_name"], additional_context)
+
+        tagged_key = self._get_tagged_object_key(
+            basic_client,
+            bucket_name,
+            destination_prefix,
+            dedup_tag_name
+        )
+        self.logger.debug("tagged_key = '{}'".format(tagged_key))
+
+        if tagged_key:
+            self.logger.info("tag for iteration already exists: '{}'".format(tagged_key))
+            return True
+
+        return False
 
     def _upload_for_rule(
         self,

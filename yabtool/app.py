@@ -46,6 +46,13 @@ def get_cli_args():
     )
 
     parser.add_argument(
+        "--disable-voting",
+        "-k",
+        action="store_true",
+        help="Allow voting for flow execution skipping"
+    )
+
+    parser.add_argument(
         "--secrets",
         "-s",
         action="store",
@@ -81,8 +88,12 @@ def get_cli_args():
         help="Path to temporary folder that will be used by yabtool"
     )
 
-    # TODO: check that we really need ability to specify flow in command line
-    parser.add_argument("--flow", "-f", action="store")
+    parser.add_argument(
+        "--flow",
+        "-f",
+        action="store",
+        help="Required flow name"
+    )
 
     return parser.parse_known_args()
 
@@ -135,6 +146,8 @@ class YabtoolFlowOrchestrator(object):
         self.logger = logger
         self._steps_factory = None
         self._backup_start_timestamp = datetime.datetime.utcnow()
+        self._skip_flow_execution_voting_result = None
+        self.skip_voting_enabled = True
 
     def initialize(self, args, unknown_args):
         self.rendering_context.unknown_args = unknown_args
@@ -238,17 +251,29 @@ class YabtoolFlowOrchestrator(object):
     def _run(self, dry_run):
         assert self.rendering_context.flow_name
 
+        if dry_run:
+            self._skip_flow_execution_voting_result = None
+
         flow_data = self.rendering_context.config_context["flows"][self.flow_name]
         flow_description = flow_data["description"]
 
         self.logger.info("flow_description: '{}'".format(flow_description))
 
-        self.rendering_context.previous_steps_values = list()
+        self.rendering_context.previous_steps_values = []
 
         rendering_environment = self._create_rendering_environment()
         secret_targets_context = self.rendering_context.secrets_context["targets"][self.target_name]
 
+        self._execute_steps(dry_run, flow_data, rendering_environment, secret_targets_context)
+
+    def _execute_steps(self, dry_run, flow_data, rendering_environment, secret_targets_context):
         assert self._steps_factory
+
+        if self._need_skip_voting():
+            self.logger.warning("Want skip flow execution")
+            return
+
+        positive_votes_for_flow_execution_skipping = []
         for step_context in flow_data["steps"]:
             step_name = step_context["name"]
 
@@ -294,6 +319,8 @@ class YabtoolFlowOrchestrator(object):
 
             if dry_run:
                 self.logger.info("initializing dry run for step: '{}'".format(step_name))
+                self.logger.debug("checking for decision for flow skipping")
+                self._check_for_flow_execution_skipping(step_object, positive_votes_for_flow_execution_skipping)
             else:
                 self.logger.info("initializing active run for step: '{}'".format(step_name))
 
@@ -301,6 +328,39 @@ class YabtoolFlowOrchestrator(object):
             self.logger.debug("additional_variables: {}".format(additional_variables))
 
             self.rendering_context.previous_steps_values.append(additional_variables)
+
+        if dry_run and positive_votes_for_flow_execution_skipping:
+            self.logger.info(
+                "Flow execution can be SKIPPED.\n\tThese steps voted to skip flow execution: {}".format(
+                    positive_votes_for_flow_execution_skipping
+                )
+            )
+            self._skip_flow_execution_voting_result = True
+
+    def _check_for_flow_execution_skipping(self, step_object, positive_votes_for_flow_execution_skipping):
+        step_name = step_object.step_name()
+
+        if self._skip_flow_execution_voting_result is not None:
+            self.logger.debug(
+                "decision for flow execution skipping already made. Can skip flow execution: {}".format(
+                    self._skip_flow_execution_voting_result
+                )
+            )
+            return
+
+        vote = step_object.vote_for_flow_execution_skipping()
+        if vote is None:
+            self.logger.debug("step '{}' do not want to vote for flow execution skipping".format(step_name))
+            return
+
+        self.logger.debug("step '{}' voted for flow execution skipping".format(step_name))
+
+        if not vote:
+            self._skip_flow_execution_voting_result = False
+            self.logger.debug("step '{}' voted against flow execution skipping".format(step_name))
+        else:
+            positive_votes_for_flow_execution_skipping.append(step_name)
+            self.logger.debug("step '{}' voted for flow execution skipping".format(step_name))
 
     def _get_target_name(self, args):
         if args.target:
@@ -376,6 +436,15 @@ class YabtoolFlowOrchestrator(object):
             return temporary_folder
 
         return self.rendering_context.config_context["defaults"]["temporary_folder"]
+
+    def _need_skip_voting(self):
+        if not self.skip_voting_enabled:
+            return False
+
+        if (self._skip_flow_execution_voting_result is not None) and self._skip_flow_execution_voting_result:
+            return True
+
+        return False
 
     def _create_folder_name_for_execution(self):
         res = "{}_{}".format(self._backup_start_timestamp.isoformat(), str(uuid.uuid4()))
@@ -455,6 +524,9 @@ class YabtoolApplication(object):
         self.logger.debug("unknown command line arguments: {}".format(unknown_args))
 
         flow_orchestrator = YabtoolFlowOrchestrator(self.logger)
+
+        if args.disable_voting:
+            flow_orchestrator.skip_voting_enabled = False
 
         try:
             flow_orchestrator.initialize(args, unknown_args)

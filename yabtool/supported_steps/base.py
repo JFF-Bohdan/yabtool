@@ -10,6 +10,12 @@ class WrongParameterTypeError(Exception):
     pass
 
 
+class StepContextData(object):
+    def __init__(self):
+        self.name = None
+        self.description = None
+
+
 class BaseFlowStep(object):
     def __init__(
         self,
@@ -39,6 +45,9 @@ class BaseFlowStep(object):
         self.logger.debug("output_variables: {}".format(output_variables))
 
         return output_variables
+
+    def vote_for_flow_execution_skipping(self):
+        return None
 
     def _render_parameter(self, parameter_name, context=None):
         if not context:
@@ -86,9 +95,3 @@ class BaseFlowStep(object):
             res[requested_value_name] = self._render_result(requested_value_template, self.additional_output_context)
 
         return res
-
-
-class StepContextData(object):
-    def __init__(self):
-        self.name = None
-        self.description = None
