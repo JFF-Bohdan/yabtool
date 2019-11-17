@@ -27,7 +27,7 @@ class ProgressPercentage(object):
         return os.path.getsize(file_name)
 
 
-class S3BacicBotoClient(object):
+class S3BasicBotoClient(object):
     DEFAULT_TRANSMISSION_CHUNK_SIZE = 8 * MB
     DEFAULT_NOTIFICATION_THRESHHOLD = 1 * MB
     DEFAULT_TRANSMISSION_MAX_THREADS = 20
@@ -80,10 +80,10 @@ class S3BacicBotoClient(object):
     ):
         if transfer_config is None:
             transfer_config = TransferConfig(
-                multipart_threshold=S3BacicBotoClient.DEFAULT_NOTIFICATION_THRESHHOLD,
-                max_concurrency=S3BacicBotoClient.DEFAULT_TRANSMISSION_MAX_THREADS,
-                multipart_chunksize=S3BacicBotoClient.DEFAULT_TRANSMISSION_CHUNK_SIZE,
-                num_download_attempts=S3BacicBotoClient.DEFAULT_MAX_TRANSMISSION_ATTEMPTS,
+                multipart_threshold=S3BasicBotoClient.DEFAULT_NOTIFICATION_THRESHHOLD,
+                max_concurrency=S3BasicBotoClient.DEFAULT_TRANSMISSION_MAX_THREADS,
+                multipart_chunksize=S3BasicBotoClient.DEFAULT_TRANSMISSION_CHUNK_SIZE,
+                num_download_attempts=S3BasicBotoClient.DEFAULT_MAX_TRANSMISSION_ATTEMPTS,
                 use_threads=True
             )
 

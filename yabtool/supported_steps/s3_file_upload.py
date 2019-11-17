@@ -5,7 +5,7 @@ import re
 import boto3
 
 from .base import BaseFlowStep, DryRunExecutionError, TransmissionError
-from .s3boto_client import S3BacicBotoClient
+from .s3boto_client import S3BasicBotoClient
 
 
 class UploadTarget(object):
@@ -45,7 +45,7 @@ class S3FileUpload(BaseFlowStep):
         region = self.secret_context["region"]
 
         raw_client = self._crete_s3_client()
-        client = S3BacicBotoClient(self.logger, raw_client)
+        client = S3BasicBotoClient(self.logger, raw_client)
 
         target_prefix_in_bucket = self._render_parameter("target_prefix_in_bucket")
         self.logger.debug("target_prefix_in_bucket: '{}'".format(target_prefix_in_bucket))
