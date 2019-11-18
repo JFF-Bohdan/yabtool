@@ -1,6 +1,6 @@
 import datetime
 
-from .app import YabtoolApplication
+from .yabtool_application import YabtoolApplication
 
 
 if __name__ == "__main__":

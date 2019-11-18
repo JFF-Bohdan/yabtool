@@ -1,16 +1,10 @@
-import argparse
 import codecs
 import copy
 import datetime
 import os
-import shutil
-import sys
 import uuid
 
 from jinja2 import BaseLoader, Environment, StrictUndefined
-import loguru
-from loguru._defaults import LOGURU_FORMAT
-from yabtool.version import __version__
 from yaml import safe_load
 
 from .supported_steps import create_steps_factory
@@ -18,84 +12,8 @@ from .supported_steps import create_steps_factory
 DEFAULT_CONFIG_RELATIVE_NAME = "../config/config.yaml"
 
 
-def dir_path(path):
-    if os.path.isdir(path):
-        return path
-    else:
-        raise argparse.ArgumentTypeError(
-            "readable_dir:{path} is not a valid path".format(path=path)
-        )
-
-
-def get_cli_args():
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument(
-        "--version",
-        "-v",
-        action="version",
-        version="%(prog)s {}".format(__version__)
-    )
-
-    parser.add_argument(
-        "--log-level",
-        "-l",
-        action="store",
-        default="DEBUG",
-        help="Specify log level (DEBUG, INFO, ...)"
-    )
-
-    parser.add_argument(
-        "--disable-voting",
-        "-k",
-        action="store_true",
-        help="Allow voting for flow execution skipping"
-    )
-
-    parser.add_argument(
-        "--secrets",
-        "-s",
-        action="store",
-        help="Path to file with secrets"
-    )
-
-    parser.add_argument(
-        "--config",
-        "-c",
-        action="store",
-        help="Path to main configuration file"
-    )
-
-    parser.add_argument(
-        "--dry-run",
-        "-y",
-        action="store_true",
-        default=None,
-        help="Perform dry run only"
-    )
-
-    parser.add_argument(
-        "--target",
-        "-d",
-        action="store",
-        help="Specify target in secret file (overrides default in secrets file if specified)"
-    )
-
-    parser.add_argument(
-        "--temporary-folder",
-        "-t",
-        action="store",
-        help="Path to temporary folder that will be used by yabtool"
-    )
-
-    parser.add_argument(
-        "--flow",
-        "-f",
-        action="store",
-        help="Required flow name"
-    )
-
-    return parser.parse_known_args()
+class ConfigurationValidationException(BaseException):
+    pass
 
 
 def jinja2_custom_filter_extract_year_four_digits(value):
@@ -134,10 +52,6 @@ class RenderingContext(object):
             res = {**res, **item}
 
         return res
-
-
-class ConfigurationValidationException(BaseException):
-    pass
 
 
 class YabtoolFlowOrchestrator(object):
@@ -512,43 +426,3 @@ class YabtoolFlowOrchestrator(object):
     def target_name(self):
         return self.rendering_context.target_name
 
-
-class YabtoolApplication(object):
-    def __init__(self):
-        self.logger = None
-        self.rendering_context = None
-
-    def run(self):
-        args, unknown_args = get_cli_args()
-        self._initialize_logger(args)
-        self.logger.debug("unknown command line arguments: {}".format(unknown_args))
-
-        flow_orchestrator = YabtoolFlowOrchestrator(self.logger)
-
-        if args.disable_voting:
-            flow_orchestrator.skip_voting_enabled = False
-
-        try:
-            flow_orchestrator.initialize(args, unknown_args)
-            flow_name = flow_orchestrator.flow_name
-
-            if not args.dry_run:
-                self.logger.info("flow '{}' started".format(flow_name))
-                flow_orchestrator.run()
-            else:
-                self.logger.info("dry run for flow '{}' performed, cleaning up".format(flow_name))
-        finally:
-            folder_name = flow_orchestrator.rendering_context.temporary_folder
-            if flow_orchestrator.rendering_context.remove_temporary_folder:
-                if folder_name and os.path.exists(folder_name) and os.path.isdir(folder_name):
-                    self.logger.info("going to remove temporary folder: {}".format(folder_name))
-                    shutil.rmtree(folder_name)
-            else:
-                self.logger.info("output folder removal disabled. folder name: '{}'".format(folder_name))
-
-        return True
-
-    def _initialize_logger(self, args):
-        self.logger = loguru.logger
-        self.logger.remove()
-        self.logger.add(sys.stdout, format=LOGURU_FORMAT, level=args.log_level)

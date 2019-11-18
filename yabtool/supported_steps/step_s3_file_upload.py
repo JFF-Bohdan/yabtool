@@ -51,12 +51,13 @@ class StepS3FileUpload(BaseFlowStep):
         for rule in upload_rules:
             self.logger.info("processing upload rule '{}'".format(rule["name"]))
 
-            self._can_skip_execution_for_rule(
+            if not self._can_skip_execution_for_rule(
                 client,
                 bucket_name,
                 rule,
                 additional_context
-            )
+            ):
+                return False
 
         return True
 
