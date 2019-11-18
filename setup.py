@@ -1,3 +1,4 @@
+import os
 from setuptools import find_packages, setup  # noqa
 from yabtool import __version__  # noqa
 
@@ -33,6 +34,12 @@ if __name__ == "__main__":
     setup(
         name=PACKAGE_NAME,
         packages=packages,
+        package_dir={
+            PACKAGE_NAME: PACKAGE_NAME
+        },
+        package_data={
+            PACKAGE_NAME: ["./config/*.yaml"]
+        },
         version=__version__,
         description="Module to support VRC-T70 hardware",
         long_description=LONG_DESCTIPTION,

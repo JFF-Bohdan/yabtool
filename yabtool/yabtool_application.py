@@ -24,7 +24,7 @@ def get_cli_args():
         "--log-level",
         "-l",
         action="store",
-        default="DEBUG",
+        default="INFO",
         help="Specify log level (DEBUG, INFO, ...)"
     )
 

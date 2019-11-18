@@ -155,7 +155,11 @@ class YabtoolFlowOrchestrator(object):
             config_file_name = os.path.join(src_path, config_file_name)
             config_file_name = os.path.abspath(config_file_name)
             config_file_name = os.path.normpath(config_file_name)
-            assert os.path.exists(config_file_name)
+
+            if not os.path.exists(config_file_name):
+                self.logger.error("can't find configuration file in '{}'".format(config_file_name))
+
+            assert os.path.exists(config_file_name), config_file_name
         else:
             config_file_name = os.path.abspath(config_file_name)
             config_file_name = os.path.normpath(config_file_name)
