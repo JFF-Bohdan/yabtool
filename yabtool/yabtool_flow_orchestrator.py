@@ -425,4 +425,3 @@ class YabtoolFlowOrchestrator(object):
     @property
     def target_name(self):
         return self.rendering_context.target_name
-
