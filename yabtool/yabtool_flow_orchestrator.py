@@ -9,7 +9,7 @@ from yaml import safe_load
 
 from .supported_steps import create_steps_factory
 
-DEFAULT_CONFIG_RELATIVE_NAME = "../config/config.yaml"
+DEFAULT_CONFIG_RELATIVE_NAME = "./config/config.yaml"
 
 
 class ConfigurationValidationException(BaseException):
