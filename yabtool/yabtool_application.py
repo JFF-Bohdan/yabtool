@@ -107,10 +107,11 @@ class YabtoolApplication(object):
                 self.logger.info("dry run for flow '{}' performed, cleaning up".format(flow_name))
         finally:
             folder_name = flow_orchestrator.rendering_context.temporary_folder
-            if flow_orchestrator.rendering_context.remove_temporary_folder:
+            if flow_orchestrator.rendering_context.remove_temporary_folder and folder_name:
                 if folder_name and os.path.exists(folder_name) and os.path.isdir(folder_name):
                     self.logger.info("going to remove temporary folder: {}".format(folder_name))
-                    shutil.rmtree(folder_name)
+                    self._remove_temporary_folder(folder_name)
+
             else:
                 self.logger.info("output folder removal disabled. folder name: '{}'".format(folder_name))
 
@@ -120,3 +121,9 @@ class YabtoolApplication(object):
         self.logger = loguru.logger
         self.logger.remove()
         self.logger.add(sys.stdout, format=LOGURU_FORMAT, level=args.log_level)
+
+    def _remove_temporary_folder(self, folder_name):
+        try:
+            shutil.rmtree(folder_name)
+        except Exception as e:
+            self.logger.error("error removing folder '{}': {}".format(folder_name, e))
