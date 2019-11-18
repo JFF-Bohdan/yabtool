@@ -1,4 +1,3 @@
-import os
 from setuptools import find_packages, setup  # noqa
 from yabtool import __version__  # noqa
 
