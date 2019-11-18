@@ -140,7 +140,7 @@ class YabtoolFlowOrchestrator(object):
         return True
 
     def run(self):
-        self.logger.info("performing active run")
+        self.logger.warning("performing active run")
         self._run(dry_run=False)
 
     def _get_config_file_name(self, args):
