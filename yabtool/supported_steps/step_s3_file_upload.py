@@ -147,12 +147,20 @@ class StepS3FileUpload(BaseFlowStep):
         self.logger.debug("destination_prefix: '{}'".format(destination_prefix))
 
         dedup_tag_name = self._render_result(rule["dedup_tag_name"], additional_context)
+        dedup_tag_value = self._render_result(rule.get("dedup_tag_value"), additional_context)
 
+        self.logger.debug(
+            "looking for objects with tag '{}' and tag value '{}'".format(
+                dedup_tag_name,
+                dedup_tag_value
+            )
+        )
         tagged_key = self._get_tagged_object_key(
             basic_client,
             bucket_name,
             destination_prefix,
-            dedup_tag_name
+            dedup_tag_name,
+            dedup_tag_value
         )
         self.logger.debug("tagged_key = '{}'".format(tagged_key))
 
@@ -180,11 +188,18 @@ class StepS3FileUpload(BaseFlowStep):
             dedup_tag_name: dedup_tag_value
         }
 
+        self.logger.debug(
+            "looking for objects with tag '{}' and tag value '{}'".format(
+                dedup_tag_name,
+                dedup_tag_value
+            )
+        )
         tagged_key = self._get_tagged_object_key(
             basic_client,
             bucket_name,
             destination_prefix,
-            dedup_tag_name
+            dedup_tag_name,
+            dedup_tag_value
         )
         self.logger.debug("tagged_key = '{}'".format(tagged_key))
 
@@ -248,7 +263,14 @@ class StepS3FileUpload(BaseFlowStep):
 
         self._remove_files_existing_for_rule(basic_client, bucket_name, existing_files_for_rule)
 
-    def _get_tagged_object_key(self, basic_client, bucket_name, destination_prefix, validation_tag):
+    def _get_tagged_object_key(
+        self,
+        basic_client,
+        bucket_name,
+        destination_prefix,
+        validation_tag_name,
+        validation_tag_value
+    ):
         objects_for_prefix = basic_client.list_files_in_folder(bucket_name, destination_prefix)
 
         for object_key in objects_for_prefix:
@@ -256,7 +278,10 @@ class StepS3FileUpload(BaseFlowStep):
 
             self.logger.debug("tags for key '{}': {}".format(object_key, object_tags))
 
-            if validation_tag in object_tags:
+            if validation_tag_name not in object_tags:
+                continue
+
+            if object_tags[validation_tag_name] == validation_tag_value:
                 return object_key
 
         return None
