@@ -408,7 +408,14 @@ class YabtoolFlowOrchestrator(object):
         res["backup_start_timestamp"] = self._backup_start_timestamp
         res["flow_name"] = self.flow_name
         res["yabtool_exec_folder"] = self.rendering_context.temporary_folder
-        res["current_year"] = self._backup_start_timestamp.date().year
+
+        res["current_year"] = self._backup_start_timestamp.strftime("%Y")
+        res["current_month"] = res["month_two_digit_number"]
+        res["current_day_of_month"] = self._backup_start_timestamp.strftime("%d")
+
+        res["current_date"] = self._backup_start_timestamp.strftime("%Y-%m-%d")
+        res["current_time"] = self._backup_start_timestamp.strftime("%H%M%S")
+
         res["lower"] = str.lower
         res["upper"] = str.upper
 
