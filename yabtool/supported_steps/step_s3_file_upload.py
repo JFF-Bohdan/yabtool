@@ -30,7 +30,7 @@ class StepS3FileUpload(BaseFlowStep):
     METRIC_TRANSMISSION_TIME = "Transmission Time"
     METRIC_TRANSMISSION_SPEED = "Transmission Speed"
     METRIC_COPIED_OBJECTS_COUNT = "Copied Speed"
-    METRIC_DELETED_OBJECTS_COUNT = "Copied Speed"
+    METRIC_DELETED_OBJECTS_COUNT = "Deleted Objects Count"
 
     def __init__(self, **kwargs):
         self._first_uploads_key_name_per_files = {}

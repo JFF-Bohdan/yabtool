@@ -1,13 +1,16 @@
 import datetime
 
+from .supported_steps.base import pretty_time_delta, time_interval
 from .yabtool_application import YabtoolApplication
 
 
 if __name__ == "__main__":
-    tm_begin = datetime.datetime.utcnow()
+    timestamp_start = datetime.datetime.utcnow()
 
     app = YabtoolApplication()
     app.run()
-    tm_end = datetime.datetime.utcnow()
 
-    app.logger.info("app finished @ {}".format(tm_end - tm_begin))
+    timestamp_end = datetime.datetime.utcnow()
+    seconds_spent = time_interval(timestamp_start, timestamp_end)
+
+    app.logger.info("app finished @ {}".format(pretty_time_delta(seconds_spent)))
