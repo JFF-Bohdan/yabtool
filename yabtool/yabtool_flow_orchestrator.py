@@ -11,13 +11,15 @@ from yaml import safe_load
 from .supported_steps import create_steps_factory
 from .yabtool_stat import StepExecutionStatisticEntry
 
-
 DEFAULT_CONFIG_RELATIVE_NAME = "./config/config.yaml"
 
+DEFAULT_CONFIG_RELATIVE_NAME = "./config/config.yaml"
 
 class ConfigurationValidationException(BaseException):
     pass
 
+class ConfigurationValidationException(BaseException):
+    pass
 
 def jinja2_custom_filter_extract_year_four_digits(value):
     return value.strftime("%Y")

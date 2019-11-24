@@ -1,5 +1,19 @@
-class DryRunExecutionError(BaseException):
+class DryRunExecutionError(Exception):
     pass
+
+
+class TransmissionError(Exception):
+    pass
+
+
+class WrongParameterTypeError(Exception):
+    pass
+
+
+class StepContextData(object):
+    def __init__(self):
+        self.name = None
+        self.description = None
 
 
 class BaseFlowStep(object):
@@ -16,19 +30,24 @@ class BaseFlowStep(object):
         self.step_context = step_context
         self.rendering_environment = rendering_environment
         self.secret_context = secret_context
-
-        self.mixed_context = self._get_mixed_context()
-
         self.additional_output_context = None
 
     @classmethod
     def step_name(cls):
         pass
 
+    @property
+    def mixed_context(self):
+        return self._get_mixed_context()
+
     def run(self, dry_run=False):
         output_variables = self._generate_output_variables()
         self.logger.debug("output_variables: {}".format(output_variables))
+
         return output_variables
+
+    def vote_for_flow_execution_skipping(self):
+        return None
 
     def _render_parameter(self, parameter_name, context=None):
         if not context:
@@ -52,6 +71,9 @@ class BaseFlowStep(object):
         return {**self.step_context, **self.secret_context}
 
     def _render_result(self, template, additional_context=None):
+        if not template:
+            return ""
+
         mixed_context = self.mixed_context
 
         if additional_context:
@@ -73,9 +95,3 @@ class BaseFlowStep(object):
             res[requested_value_name] = self._render_result(requested_value_template, self.additional_output_context)
 
         return res
-
-
-class StepContextData(object):
-    def __init__(self):
-        self.name = None
-        self.description = None

@@ -1,13 +1,16 @@
 import string
 
-import secrets
+try:
+    import secrets
+except ImportError:
+    import random as secrets
 
 
 def gen_password(length=20, alphabet=None):
     if not alphabet:
         alphabet = string.ascii_letters + string.digits
 
-    password = "".join([secrets.choice(alphabet) for i in range(length)])
+    password = "".join([secrets.choice(alphabet) for _ in range(length)])
     print(password)
 
 

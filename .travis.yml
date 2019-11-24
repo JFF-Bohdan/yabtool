@@ -1,0 +1,26 @@
+dist: xenial
+language: python
+python:
+- 3.5
+- 3.6
+- 3.7
+install:
+- pip install -r requirements-dev.txt
+- pip install coveralls
+script:
+- python -m flake8
+- py.test tests -v --cov=yabtool
+- python setup.py check
+- python setup.py test
+after_success:
+- coveralls --verbose
+deploy:
+  provider: pypi
+  user: kittyhawk
+  distributions: sdist bdist_wheel
+  password:
+    secure: iPjUQ+BHh9y9oAu6N9c5SaLtica+1pbB7u1V9YbdHMdX3pNlM8kcjdEtHjV7XvqWhywY2K4OrVXGKbq9aSBSdVC3cwtYPAQ/lyRJVko4RLqYZNeiJAR9h5hDBj/VhYyGTzmTI7CcmOf9uCsRGhNNrsF7b20XuFwNh00J2t1RDs38bobUComJdjHbFn0WWM8t2XSuD6cGETV8se2A+epurb/+o2yHiEh4m5MI3dfJUafVcHK49H2RC9pa9NmZ3osBq7uGqTWQ0OkOMjo2wYQvRTuHufrHdsi9QVVS9h+ZlWzMOZ//MnzdpHVVmXrB1bn5r03BZtDvWVSONo4xqKxrSSnhk5aUOsvaZrrSVy+IciR/UdbFjA7cv5Y+mTiRml0SK9ZIbmYyHkd3k25BVBnCGxYY9xj/+twpVvsUSxJV4tAAD66DGCLv4DCgQ5xK5WkYxAaeOxtpN6HFmg3gAIxnyqFp6UeT+mpnr6Q9mIWKLNQArwqpLtIulxI6xH2Nckds49pYxBVdopyOqHG8w+TYnl9ucSDo1FNm5zsBsc/GTSMhyIqJLeLjkdUGCENyMw38dQ5VfpnOGf5HCDRETFubNQPDu6EygyyZhzhOt7bUnzgDQLxE+Kx0JDHfqXAwsWlM4HsAANTHFCBB1iaTwVCfrcfZM9qjfpnzU74UDHvVFAE=
+  on:
+    tags: false
+    branch: master
+    condition: $TRAVIS_PYTHON_VERSION = "3.6"

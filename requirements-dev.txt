@@ -9,6 +9,3 @@ pytest-cov>=2.4.0
 twine>=1.15.0
 pytest-pep8>=1.0.6
 pre-commit>=1.18.3
-black>=19.3b0
-isort
-

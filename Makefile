@@ -81,8 +81,7 @@ local_install:
 
 .PHONY: develop_install
 develop_install:
-	$(PYTHON) setup.py install
-	 python setup.py develop
+	$(PYTHON) setup.py develop
 
 .PHONY: isort
 isort:
