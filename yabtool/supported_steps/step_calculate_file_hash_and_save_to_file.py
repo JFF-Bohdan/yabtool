@@ -1,4 +1,5 @@
 import codecs
+import datetime
 import hashlib
 import os
 
@@ -6,7 +7,8 @@ from .base import BaseFlowStep, DryRunExecutionError
 
 
 class StepCalculateFileHashAndSaveToFile(BaseFlowStep):
-    def run(self, dry_run=False):
+
+    def run(self, stat_entry, dry_run=False):
         input_file_name = self._render_parameter("input_file_name")
         self.step_context["input_file_name"] = input_file_name
 
@@ -21,8 +23,27 @@ class StepCalculateFileHashAndSaveToFile(BaseFlowStep):
             raise DryRunExecutionError("unsupported hash type '{}'".format(hash_type))
 
         if not dry_run:
-            self.logger.info("going calculate hash ('{}') for '{}'".format(hash_type, input_file_name))
+            self.logger.info("calculating hash ('{}') for '{}'".format(hash_type, input_file_name))
+
+            hashing_begin_timestamp = datetime.datetime.utcnow()
             hash_value = self._hash_file(input_file_name, hash_type)
+            hashing_end_timestamp = datetime.datetime.utcnow()
+
+            metric = self._get_metric_by_name(stat_entry, "Hashed File")
+            metric.value = os.path.basename(input_file_name)
+
+            metric = self._get_metric_by_name(stat_entry, "Hash Type")
+            metric.value = os.path.basename(hash_type)
+
+            metric = self._get_metric_by_name(stat_entry, "File Size", units_name="MiB")
+            size_in_mibs = self._get_file_size_in_mibs(input_file_name)
+            metric.value = "{:.2f}".format(size_in_mibs)
+
+            metric = self._get_metric_by_name(stat_entry, "Hash Speed", units_name="MiB/s")
+            spent_time = (hashing_end_timestamp - hashing_begin_timestamp).total_seconds()
+            megs_per_second = size_in_mibs / spent_time
+            metric.value = "{:.2f}".format(megs_per_second)
+
             output_data = "{} *{}\n".format(hash_value, os.path.basename(input_file_name))
             self._save_data(output_file_name, output_data)
 

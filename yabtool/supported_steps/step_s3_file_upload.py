@@ -4,7 +4,7 @@ import re
 
 import boto3
 
-from .base import BaseFlowStep, DryRunExecutionError, TransmissionError
+from .base import BaseFlowStep, DryRunExecutionError, time_interval, TransmissionError
 from .s3boto_client import S3BasicBotoClient
 
 
@@ -24,6 +24,13 @@ class UploadTarget(object):
 
 class StepS3FileUpload(BaseFlowStep):
     S3_BUCKET_NAME_REGEX = r"^[a-zA-Z0-9.\-_]{1,255}$"
+
+    METRIC_UPLOADED_OBJECTS_COUNT = "Uploaded Objects"
+    METRIC_UPLOADED_SIZE = "Uploaded Size"
+    METRIC_TRANSMISSION_TIME = "Transmission Time"
+    METRIC_TRANSMISSION_SPEED = "Transmission Speed"
+    METRIC_COPIED_OBJECTS_COUNT = "Copied Speed"
+    METRIC_DELETED_OBJECTS_COUNT = "Copied Speed"
 
     def __init__(self, **kwargs):
         self._first_uploads_key_name_per_files = {}
@@ -61,7 +68,7 @@ class StepS3FileUpload(BaseFlowStep):
 
         return True
 
-    def run(self, dry_run=False):
+    def run(self, stat_entry, dry_run=False):
         self.logger.debug("self.secret_context: {}".format(self.secret_context))
 
         bucket_name = self.secret_context["bucket_name"]
@@ -103,12 +110,37 @@ class StepS3FileUpload(BaseFlowStep):
         for rule in upload_rules:
             self.logger.info("processing upload rule '{}'".format(rule["name"]))
             self._upload_for_rule(
+                stat_entry,
                 client,
                 bucket_name,
                 rule,
                 targets,
                 additional_context
             )
+
+        uploaded_size_metric = self._get_metric_by_name(
+            stat_entry,
+            StepS3FileUpload.METRIC_UPLOADED_SIZE
+        )
+        upload_time_metric = self._get_metric_by_name(
+            stat_entry,
+            StepS3FileUpload.METRIC_TRANSMISSION_TIME
+        )
+
+        if uploaded_size_metric.value and upload_time_metric.value:
+            transmission_speed_metric = self._get_metric_by_name(
+                stat_entry,
+                StepS3FileUpload.METRIC_TRANSMISSION_SPEED,
+                units_name="MiB/s"
+            )
+
+            transmission_speed_metric.value = round(uploaded_size_metric.value / upload_time_metric.value, 2)
+
+        if uploaded_size_metric.value:
+            uploaded_size_metric.value = round(uploaded_size_metric.value, 2)
+
+        if upload_time_metric.value:
+            upload_time_metric.value = round(upload_time_metric.value, 3)
 
         return super().run(dry_run)
 
@@ -172,6 +204,7 @@ class StepS3FileUpload(BaseFlowStep):
 
     def _upload_for_rule(
         self,
+        stat_entry,
         basic_client,
         bucket_name,
         rule,
@@ -233,11 +266,38 @@ class StepS3FileUpload(BaseFlowStep):
                 self.logger.info("no previous uploads available - FRESH UPLOAD")
                 self.logger.info("bucket_name: '{}', dest_key_name: '{}'".format(bucket_name, dest_key_name))
 
+                transmission_start_timestamp = self._get_current_timestamp()
                 basic_client.upload_file(
                     bucket_name,
                     dest_key_name,
                     upload_target.os_file_name
                 )
+                transmission_end_timestamp = self._get_current_timestamp()
+
+                metric = self._get_metric_by_name(
+                    stat_entry,
+                    StepS3FileUpload.METRIC_UPLOADED_OBJECTS_COUNT,
+                    initial_value=0,
+                    units_name="items"
+                )
+                metric.increment(1)
+
+                metric = self._get_metric_by_name(
+                    stat_entry,
+                    StepS3FileUpload.METRIC_UPLOADED_SIZE,
+                    initial_value=0.0,
+                    units_name="MiB"
+                )
+                size_in_mibs = self._get_file_size_in_mibs(upload_target.os_file_name)
+                metric.increment(size_in_mibs)
+
+                metric = self._get_metric_by_name(
+                    stat_entry,
+                    StepS3FileUpload.METRIC_TRANSMISSION_TIME,
+                    initial_value=0.0,
+                    units_name="seconds"
+                )
+                metric.increment(time_interval(transmission_end_timestamp, transmission_start_timestamp))
 
                 self._first_uploads_key_name_per_files[upload_target.os_file_name] = dest_key_name
             else:
@@ -255,13 +315,21 @@ class StepS3FileUpload(BaseFlowStep):
                     dest_key_name
                 )
 
+                metric = self._get_metric_by_name(
+                    stat_entry,
+                    StepS3FileUpload.METRIC_COPIED_OBJECTS_COUNT,
+                    initial_value=0,
+                    units_name="items"
+                )
+                metric.increment(1)
+
             if dest_key_name in existing_files_for_rule:
                 existing_files_for_rule.remove(dest_key_name)
 
             if upload_target.add_dedup_tag:
                 basic_client.set_object_tags(bucket_name, dest_key_name, marking_tags)
 
-        self._remove_files_existing_for_rule(basic_client, bucket_name, existing_files_for_rule)
+        self._remove_files_existing_for_rule(stat_entry, basic_client, bucket_name, existing_files_for_rule)
 
     def _get_tagged_object_key(
         self,
@@ -293,13 +361,21 @@ class StepS3FileUpload(BaseFlowStep):
 
         return existing_files_for_rule
 
-    def _remove_files_existing_for_rule(self, basic_client, bucket_name, existing_files_for_rule):
+    def _remove_files_existing_for_rule(self, stat_entry, basic_client, bucket_name, existing_files_for_rule):
         existing_files_base_names = [os.path.basename(item) for item in existing_files_for_rule]
         self.logger.info("some files already exists in folder for rule: {}".format(existing_files_base_names))
 
         for existing_file in existing_files_for_rule:
             self.logger.info("removing item '{}'".format(existing_file))
             basic_client.delete_object(bucket_name, existing_file)
+
+            metric = self._get_metric_by_name(
+                stat_entry,
+                StepS3FileUpload.METRIC_DELETED_OBJECTS_COUNT,
+                initial_value=0,
+                units_name="items"
+            )
+            metric.increment(1)
 
     def _get_real_source_file_names_for_targets(self, targets):
         res = []

@@ -3,7 +3,7 @@ from .shared import ThirdPartyCommandsExecutor
 
 
 class StepMakeFirebirdDatabaseBackup(BaseFlowStep):
-    def run(self, dry_run=False):
+    def run(self, stat_entry, dry_run=False):
         backup_log_name = self._render_parameter("backup_log_name")
         self.step_context["backup_log_name"] = backup_log_name
 

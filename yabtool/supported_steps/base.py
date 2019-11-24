@@ -1,3 +1,7 @@
+import datetime
+import os
+
+
 class DryRunExecutionError(Exception):
     pass
 
@@ -16,7 +20,34 @@ class StepContextData(object):
         self.description = None
 
 
+def pretty_time_delta(seconds):
+    sign_string = "-" if seconds < 0 else ""
+    seconds = abs(seconds)
+    days, seconds = divmod(seconds, 86400)
+    hours, seconds = divmod(seconds, 3600)
+    minutes, seconds = divmod(seconds, 60)
+
+    if days > 0:
+        return "{}{}d{}h{}m{}s".format(sign_string, days, hours, minutes, seconds)
+    elif hours > 0:
+        return "{}{}h{}m{}s".format(sign_string, hours, minutes, seconds)
+    elif minutes > 0:
+        return "{}{}m{}s".format(sign_string, minutes, seconds)
+    else:
+        return "{}{:.3f}s".format(sign_string, seconds)
+
+
+def time_interval(timestamp_start, timestamp_end):
+    time_elapsed = (timestamp_end - timestamp_start)
+    res = float(time_elapsed.total_seconds())
+
+    res += round(time_elapsed.microseconds / 1000000, 3)
+    return res
+
+
 class BaseFlowStep(object):
+    BYTES_IN_MEGABYTE = 1024 * 1024
+
     def __init__(
         self,
         logger,
@@ -40,7 +71,7 @@ class BaseFlowStep(object):
     def mixed_context(self):
         return self._get_mixed_context()
 
-    def run(self, dry_run=False):
+    def run(self, stat_entry, dry_run=False):
         output_variables = self._generate_output_variables()
         self.logger.debug("output_variables: {}".format(output_variables))
 
@@ -95,3 +126,15 @@ class BaseFlowStep(object):
             res[requested_value_name] = self._render_result(requested_value_template, self.additional_output_context)
 
         return res
+
+    def _get_metric_by_name(self, stat_entry, metric_name, initial_value=None, units_name=None):
+        return stat_entry.metrics.get_metric(metric_name, initial_value=initial_value, units_name=units_name)
+
+    def _get_file_size_in_mibs(self, file_name):
+        file_size = os.path.getsize(file_name)
+
+        size_in_megs = (file_size / BaseFlowStep.BYTES_IN_MEGABYTE)
+        return size_in_megs
+
+    def _get_current_timestamp(self):
+        return datetime.datetime.utcnow()

@@ -9,17 +9,17 @@ import terminaltables
 from yaml import safe_load
 
 from .supported_steps import create_steps_factory
+from .supported_steps.base import pretty_time_delta, time_interval
 from .yabtool_stat import StepExecutionStatisticEntry
 
 DEFAULT_CONFIG_RELATIVE_NAME = "./config/config.yaml"
 
 DEFAULT_CONFIG_RELATIVE_NAME = "./config/config.yaml"
 
-class ConfigurationValidationException(BaseException):
-    pass
 
 class ConfigurationValidationException(BaseException):
     pass
+
 
 def jinja2_custom_filter_extract_year_four_digits(value):
     return value.strftime("%Y")
@@ -31,22 +31,6 @@ def jinja2_custom_filter_extract_month_two_digits(value):
 
 def jinja2_custom_filter_extract_day_two_digits(value):
     return value.strftime("%d")
-
-
-def pretty_time_delta(seconds):
-    sign_string = '-' if seconds < 0 else ''
-    seconds = abs(int(seconds))
-    days, seconds = divmod(seconds, 86400)
-    hours, seconds = divmod(seconds, 3600)
-    minutes, seconds = divmod(seconds, 60)
-    if days > 0:
-        return '%s%dd%dh%dm%ds' % (sign_string, days, hours, minutes, seconds)
-    elif hours > 0:
-        return '%s%dh%dm%ds' % (sign_string, hours, minutes, seconds)
-    elif minutes > 0:
-        return '%s%dm%ds' % (sign_string, minutes, seconds)
-    else:
-        return '%s%ds' % (sign_string, seconds)
 
 
 class RenderingContext(object):
@@ -168,8 +152,8 @@ class YabtoolFlowOrchestrator(object):
         self._run(dry_run=False)
 
     def print_stat(self):
-        if self._dry_run_statistics:
-            self._print_stat("Dry run statistics:", self._dry_run_statistics)
+        # if self._dry_run_statistics:
+        #     self._print_stat("Dry run statistics:", self._dry_run_statistics)
 
         if self._active_run_statistics:
             self._print_stat("Execution statistics:", self._active_run_statistics)
@@ -181,30 +165,58 @@ class YabtoolFlowOrchestrator(object):
         header = ["Step Name", "Exexcution start timestamp", "Execution end timestamp", "Time elapsed "]
         data = [header]
 
-        total_time_elapsed = datetime.timedelta()
+        total_time_elapsed_seconds = 0
         max_length = len(data[0]) if data else 0
         for statistics_item in stat_source:
-            time_elapsed = (statistics_item.execution_end_timestamp - statistics_item.execution_start_timestamp)
+            step_name = "{} ({})".format(statistics_item.step_human_readable_name, statistics_item.step_name)
+            time_elapsed_in_seconds = time_interval(
+                statistics_item.execution_start_timestamp,
+                statistics_item.execution_end_timestamp,
+            )
 
             data_row = [
-                statistics_item.step_name,
+                step_name,
                 statistics_item.execution_start_timestamp.isoformat(),
                 statistics_item.execution_end_timestamp.isoformat(),
-                pretty_time_delta(time_elapsed.total_seconds())
+                pretty_time_delta(time_elapsed_in_seconds)
             ]
 
             data.append(data_row)
             max_length = max_length if max_length <= len(data_row) else len(data_row)
 
-            total_time_elapsed += time_elapsed
+            total_time_elapsed_seconds += time_elapsed_in_seconds
 
-        data_row = [""]*(max_length-2)
+        data_row = [""] * (max_length - 2)
         data_row.append("Total")
-        data_row.append(pretty_time_delta(total_time_elapsed.total_seconds()))
+        data_row.append(pretty_time_delta(total_time_elapsed_seconds))
         data.append(data_row)
 
         table = terminaltables.AsciiTable(data)
         self.logger.info("{}:\n{}".format(title, table.table))
+
+        for statistics_item in stat_source:
+            step_name = "{} ({})".format(statistics_item.step_human_readable_name, statistics_item.step_name)
+
+            metrics = statistics_item.metrics
+            if metrics.is_empty():
+                continue
+
+            metrics_data = [["Name", "Value"]]
+
+            for metric_name in metrics.get_all_metrics():
+                metric = metrics.get_metric(metric_name)
+                metrics_data.append(
+                    [
+                        metric.metric_name,
+                        "{} {}".format(
+                            metric.value,
+                            metric.units_name
+                        )
+                    ]
+                )
+
+            table = terminaltables.AsciiTable(metrics_data)
+            self.logger.info("Metric for '{}':\n{}".format(step_name, table.table))
 
     def _get_config_file_name(self, args):
         config_file_name = args.config
@@ -260,6 +272,7 @@ class YabtoolFlowOrchestrator(object):
         positive_votes_for_flow_execution_skipping = []
         for step_context in flow_data["steps"]:
             step_name = step_context["name"]
+            step_human_readable_name = step_context.get("human_readable_name", step_name)
 
             step_description = step_context.get("description", "<no description>")
 
@@ -310,9 +323,10 @@ class YabtoolFlowOrchestrator(object):
 
             stat_entry = StepExecutionStatisticEntry(
                 step_name=step_name,
+                step_human_readable_name=step_human_readable_name,
                 execution_start_timestamp=datetime.datetime.utcnow()
             )
-            additional_variables = step_object.run(dry_run=dry_run)
+            additional_variables = step_object.run(stat_entry, dry_run=dry_run)
             stat_entry.execution_end_timestamp = datetime.datetime.utcnow()
 
             statistics_list.append(stat_entry)

@@ -4,7 +4,7 @@ from .base import BaseFlowStep
 
 
 class StepMakeDirectoryForBackup(BaseFlowStep):
-    def run(self, dry_run=False):
+    def run(self, stat_entry, dry_run=False):
 
         res = self._render_parameter("generation_mask")
         res = os.path.normpath(os.path.abspath(res))

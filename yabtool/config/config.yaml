@@ -8,11 +8,13 @@ flows:
 
     steps:
       - name: "mkdir_for_backup"
+        human_readable_name: "Make directory for backup"
         description: "Makes directory for backup output"
         generation_mask: "{{yabtool_exec_folder}}/{{main_target_name}}/{{current_date}}T{{current_time}}_{{main_target_name}}_backup"
         generates:
           output_folder_name: "{{result}}"
       - name: "firebird_backup"
+        human_readable_name: "Firebird database backup"
         command_template: "gbak -backup_database -user {{user_name}} -password {{password}} -verbose -y {{output_folder_name}}/{{backup_log_name}} {{database_host}}:{{database_path}} {{output_folder_name}}/{{backup_file_name}}"
         backup_log_name: "backup.log"
         backup_file_name: "{{main_target_name}}.fbk"
@@ -20,11 +22,13 @@ flows:
         generates:
           backup_file_name: "{{backup_file_name}}"
       - name: "calculate_file_hash_and_save_in_file"
+        human_readable_name: "Calculate hash for file"
         input_file_name: "{{output_folder_name}}/{{backup_file_name}}"
         output_file_name: "{{output_folder_name}}/{{backup_file_name}}.sha256"
         file_name_in_validation_file: "{{backup_file_name}}"
         hash_type: "sha256"
       - name: "7z_compress"
+        human_readable_name: "Compress with 7z"
         command_template: "7z a {{output_archive_name}} -p{{archive_password}} -mhe -t7z  {{output_folder_name}}"
         output_archive_name: "{{output_folder_name}}.7z"
         dry_run_command: "7z"
@@ -32,6 +36,7 @@ flows:
           output_archive_extension: "7z"
           output_archive_name: "{{output_archive_name}}"
       - name: "calculate_file_hash_and_save_in_file"
+        human_readable_name: "Calculate hash for file"
         input_file_name: "{{output_archive_name}}"
         output_file_name: "{{output_archive_name}}.sha256"
         file_name_in_validation_file: "{{backup_file_name}}"
@@ -39,11 +44,13 @@ flows:
         generates:
           output_archive_hash_file_name: "{{output_file_name}}"
       - name: "validate_7z_archive"
+        human_readable_name: "Validate 7z archive"
         command_template: "7z t {{output_archive_name}} * -r -p{{archive_password}}"
         dry_run_command: "7z"
         relative_secrets:
           - 7z_compress
       - name: "s3_multipart_upload"
+        human_readable_name: "Upload to S3 with rotation"
         target_prefix_in_bucket: "{{prefix_in_bucket}}{{main_target_name}}"
         source_files:
           - source_file: "{{output_archive_name}}"

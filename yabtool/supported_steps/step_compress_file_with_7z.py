@@ -1,10 +1,10 @@
-from .base import BaseFlowStep
+from .base import BaseFlowStep, time_interval
 from .shared import ThirdPartyCommandsExecutor
 
 
 class StepCompressFileWith7Z(BaseFlowStep):
 
-    def run(self, dry_run=False):
+    def run(self, stat_entry, dry_run=False):
         output_archive_name = self._render_parameter("output_archive_name")
         self.step_context["output_archive_name"] = output_archive_name
 
@@ -14,6 +14,7 @@ class StepCompressFileWith7Z(BaseFlowStep):
         dry_run_command = self._render_parameter("dry_run_command")
         self.step_context["dry_run_command"] = dry_run_command
 
+        timestamp_execution_start = self._get_current_timestamp()
         if not dry_run:
             self.logger.info("Compressing file with 7Z archive")
             self.logger.debug("going to execute: {}".format(command))
@@ -22,7 +23,9 @@ class StepCompressFileWith7Z(BaseFlowStep):
             self.logger.debug("going to execute: {}".format(dry_run_command))
             result = ThirdPartyCommandsExecutor.execute(dry_run_command)
 
-        self.logger.info("returncode: {}".format(result.returncode))
+        self.logger.info("return code: {}".format(result.returncode))
+
+        timestamp_execution_end = self._get_current_timestamp()
 
         if not dry_run:
             self.logger.info("stderr:\n{}".format(result.stderr.decode("utf-8")))
@@ -30,6 +33,24 @@ class StepCompressFileWith7Z(BaseFlowStep):
 
         if not dry_run:
             result.check_returncode()
+
+            size_in_mibs = self._get_file_size_in_mibs(output_archive_name)
+            spen_time = time_interval(timestamp_execution_start, timestamp_execution_end)
+            speed_in_mibs = size_in_mibs / spen_time
+
+            self._get_metric_by_name(
+                stat_entry,
+                "Compressed Size",
+                initial_value=round(size_in_mibs, 2),
+                units_name="MiB"
+            )
+
+            self._get_metric_by_name(
+                stat_entry,
+                "Compression Speed",
+                initial_value=round(speed_in_mibs, 2),
+                units_name="MiB/s"
+            )
 
         return super().run(dry_run)
 
