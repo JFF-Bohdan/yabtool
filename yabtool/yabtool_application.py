@@ -137,6 +137,9 @@ class YabtoolApplication(object):
                 flow_orchestrator.run()
 
             flow_orchestrator.print_stat()
+        except BaseException as e:
+            self.logger.exception("Error performing flow: {}".format(e))
+
         finally:
 
             if flow_orchestrator.rendering_context.remove_temporary_folder and folder_name:
