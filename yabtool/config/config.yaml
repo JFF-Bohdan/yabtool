@@ -5,7 +5,7 @@ parameters:
 flows:
   fb7zs3-flow:
     description: "Backup of firebird databases with further compression using 7z and upload to the S3 storage"
-
+    human_readable_name: "FB backup with S3 upload with rotation"
     steps:
       - name: "mkdir_for_backup"
         human_readable_name: "Make directory for backup"

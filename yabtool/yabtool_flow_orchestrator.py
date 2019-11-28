@@ -14,8 +14,6 @@ from .yabtool_stat import StepExecutionStatisticEntry
 
 DEFAULT_CONFIG_RELATIVE_NAME = "./config/config.yaml"
 
-DEFAULT_CONFIG_RELATIVE_NAME = "./config/config.yaml"
-
 
 class ConfigurationValidationException(BaseException):
     pass
@@ -68,8 +66,8 @@ class YabtoolFlowOrchestrator(object):
         self._skip_flow_execution_voting_result = None
         self.skip_voting_enabled = True
 
-        self._dry_run_statistics = []
-        self._active_run_statistics = []
+        self.dry_run_statistics = []
+        self.active_run_statistics = []
 
     def initialize(self, args, unknown_args):
         self.rendering_context.unknown_args = unknown_args
@@ -152,23 +150,32 @@ class YabtoolFlowOrchestrator(object):
         self._run(dry_run=False)
 
     def print_stat(self):
-        # if self._dry_run_statistics:
-        #     self._print_stat("Dry run statistics:", self._dry_run_statistics)
+        if self.dry_run_statistics:
+            stat_data = self.produce_exeuction_stat(self.dry_run_statistics)
+            self.logger.info("{}:\n{}".format("Dry run statistics:", stat_data))
+            metrics_data_list = self.produce_execution_metrics(self.dry_run_statistics)
+            for step_name, metrics_data_item in metrics_data_list:
+                self.logger.info("Metrics for '{}':\n{}".format(step_name, metrics_data_item))
 
-        if self._active_run_statistics:
-            self._print_stat("Execution statistics:", self._active_run_statistics)
+        if self.active_run_statistics:
+            stat_data = self.produce_exeuction_stat(self.active_run_statistics)
+            self.logger.info("{}:\n{}".format("Execution statistics:", stat_data))
+            metrics_data_list = self.produce_execution_metrics(self.active_run_statistics)
+            for step_name, metrics_data_item in metrics_data_list:
+                self.logger.info("Metrics for '{}':\n{}".format(step_name, metrics_data_item))
 
-        if (not self._dry_run_statistics) and (not self._active_run_statistics):
+        if (not self.dry_run_statistics) and (not self.active_run_statistics):
             self.logger.info("No execution statistics")
 
-    def _print_stat(self, title, stat_source):
+    def produce_exeuction_stat(self, stat_source):
         header = ["Step Name", "Exexcution start timestamp", "Execution end timestamp", "Time elapsed "]
         data = [header]
 
         total_time_elapsed_seconds = 0
         max_length = len(data[0]) if data else 0
         for statistics_item in stat_source:
-            step_name = "{} ({})".format(statistics_item.step_human_readable_name, statistics_item.step_name)
+            # step_name = "{} ({})".format(statistics_item.step_human_readable_name, statistics_item.step_name)
+            step_name = statistics_item.step_name
             time_elapsed_in_seconds = time_interval(
                 statistics_item.execution_start_timestamp,
                 statistics_item.execution_end_timestamp,
@@ -192,8 +199,10 @@ class YabtoolFlowOrchestrator(object):
         data.append(data_row)
 
         table = terminaltables.AsciiTable(data)
-        self.logger.info("{}:\n{}".format(title, table.table))
+        return table.table
 
+    def produce_execution_metrics(self, stat_source):
+        res = []
         for statistics_item in stat_source:
             step_name = "{} ({})".format(statistics_item.step_human_readable_name, statistics_item.step_name)
 
@@ -216,7 +225,10 @@ class YabtoolFlowOrchestrator(object):
                 )
 
             table = terminaltables.AsciiTable(metrics_data)
-            self.logger.info("Metric for '{}':\n{}".format(step_name, table.table))
+            res_item = (step_name, table.table)
+            res.append(res_item)
+
+        return res
 
     def _get_config_file_name(self, args):
         config_file_name = args.config
@@ -254,7 +266,7 @@ class YabtoolFlowOrchestrator(object):
 
         self.rendering_context.previous_steps_values = []
 
-        rendering_environment = self._create_rendering_environment()
+        rendering_environment = self.create_rendering_environment()
         secret_targets_context = self.rendering_context.secrets_context["targets"][self.target_name]
 
         self._execute_steps(dry_run, flow_data, rendering_environment, secret_targets_context)
@@ -262,7 +274,7 @@ class YabtoolFlowOrchestrator(object):
     def _execute_steps(self, dry_run, flow_data, rendering_environment, secret_targets_context):
         assert self._steps_factory
 
-        statistics_list = self._dry_run_statistics if dry_run else self._active_run_statistics
+        statistics_list = self.dry_run_statistics if dry_run else self.active_run_statistics
         statistics_list.clear()
 
         if self._need_skip_voting():
@@ -459,7 +471,7 @@ class YabtoolFlowOrchestrator(object):
         return res
 
     @staticmethod
-    def _create_rendering_environment():
+    def create_rendering_environment():
         env = Environment(loader=BaseLoader, undefined=StrictUndefined)
 
         env.filters["extract_year_four_digits"] = jinja2_custom_filter_extract_year_four_digits
@@ -524,3 +536,7 @@ class YabtoolFlowOrchestrator(object):
     @property
     def target_name(self):
         return self.rendering_context.target_name
+
+    @property
+    def backup_start_timestamp(self):
+        return self._backup_start_timestamp

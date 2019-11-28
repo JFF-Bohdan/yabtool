@@ -35,7 +35,7 @@ class StepValidate7ZArchive(BaseFlowStep):
 
             size_in_mibs = self._get_file_size_in_mibs(output_archive_name)
             spen_time = time_interval(timestamp_execution_start, timestamp_execution_end)
-            speed_in_mibs = size_in_mibs / spen_time
+            speed_in_mibs = (size_in_mibs / spen_time) if spen_time else "N/A"
 
             self._get_metric_by_name(
                 stat_entry,

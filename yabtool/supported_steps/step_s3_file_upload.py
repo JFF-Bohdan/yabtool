@@ -134,7 +134,10 @@ class StepS3FileUpload(BaseFlowStep):
                 units_name="MiB/s"
             )
 
-            transmission_speed_metric.value = round(uploaded_size_metric.value / upload_time_metric.value, 2)
+            if upload_time_metric.value:
+                transmission_speed_metric.value = round(uploaded_size_metric.value / upload_time_metric.value, 2)
+            else:
+                transmission_speed_metric.value = "N/A"
 
         if uploaded_size_metric.value:
             uploaded_size_metric.value = round(uploaded_size_metric.value, 2)

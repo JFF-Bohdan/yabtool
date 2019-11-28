@@ -41,7 +41,9 @@ class StepCalculateFileHashAndSaveToFile(BaseFlowStep):
 
             metric = self._get_metric_by_name(stat_entry, "Hash Speed", units_name="MiB/s")
             spent_time = (hashing_end_timestamp - hashing_begin_timestamp).total_seconds()
-            megs_per_second = size_in_mibs / spent_time
+
+            megs_per_second = (size_in_mibs / spent_time) if spent_time else "N/A"
+
             metric.value = "{:.2f}".format(megs_per_second)
 
             output_data = "{} *{}\n".format(hash_value, os.path.basename(input_file_name))
