@@ -44,6 +44,7 @@ class RenderingContext(object):
         self.basic_values = dict()
         self.previous_steps_values = list()
         self.temporary_folder = None
+        self.root_temporary_folder = None
 
         self.remove_temporary_folder = None
         self.perform_dry_run = None
@@ -70,7 +71,6 @@ class YabtoolFlowOrchestrator(object):
         self.active_run_statistics = []
 
     def initialize(self, args, unknown_args):
-        self.rendering_context.unknown_args = unknown_args
         self.rendering_context.config_file_name = self._get_config_file_name(args)
         self.logger.debug(
             "config_file_name: '{}'".format(self.rendering_context.config_file_name)
@@ -89,6 +89,8 @@ class YabtoolFlowOrchestrator(object):
         self.rendering_context.config_context = self._load_yaml_file(
             self.rendering_context.config_file_name
         )
+
+        self.rendering_context.unknown_args = unknown_args
 
         self.rendering_context.secrets_file_name = self._get_secrets_file_name(args)
         if not self.rendering_context.secrets_file_name:
@@ -119,10 +121,10 @@ class YabtoolFlowOrchestrator(object):
         self.rendering_context.remove_temporary_folder = self.config_context["parameters"]["remove_temporary_folder"]
         self.rendering_context.perform_dry_run = self.config_context["parameters"]["perform_dry_run"] or args.dry_run
 
-        self.rendering_context.temporary_folder = self._get_temporary_folder(args)
+        self.rendering_context.root_temporary_folder = self._get_temporary_folder(args)
 
         self.rendering_context.temporary_folder = os.path.join(
-            self.rendering_context.temporary_folder,
+            self.rendering_context.root_temporary_folder,
             self._create_folder_name_for_execution(),
         )
 
@@ -139,11 +141,12 @@ class YabtoolFlowOrchestrator(object):
             "basic_values: {}".format(self.rendering_context.basic_values)
         )
 
+        return True
+
+    def dry_run(self):
         self.logger.warning("performing dry run")
         if self.rendering_context.perform_dry_run:
             self._run(dry_run=True)
-
-        return True
 
     def run(self):
         self.logger.warning("performing active run")

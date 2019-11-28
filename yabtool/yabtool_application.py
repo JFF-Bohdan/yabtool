@@ -43,6 +43,7 @@ def get_cli_args():
     parser.add_argument(
         "--secrets",
         "-s",
+        required=True,
         action="store",
         help="Path to file with secrets"
     )
@@ -81,6 +82,22 @@ def get_cli_args():
         "-f",
         action="store",
         help="Required flow name"
+    )
+
+    parser.add_argument(
+        "--add-main-log",
+        "-m",
+        action="store_true",
+        default=False,
+        help="Add main log to logs folder"
+    )
+
+    parser.add_argument(
+        "--add-session-log",
+        "-p",
+        action="store_true",
+        default=False,
+        help="Add session log file"
     )
 
     return parser.parse_known_args()
@@ -254,6 +271,9 @@ class YabtoolApplication(object):
         folder_name = None
         try:
             flow_orchestrator.initialize(args, unknown_args)
+
+            folder_name = flow_orchestrator.rendering_context.temporary_folder
+            root_temporary_folder = flow_orchestrator.rendering_context.root_temporary_folder
             flow_name = flow_orchestrator.flow_name
 
             if args.add_main_log:
