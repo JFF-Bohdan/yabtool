@@ -116,6 +116,7 @@ class StepS3FileUpload(BaseFlowStep):
             stat_entry,
             StepS3FileUpload.METRIC_UPLOADED_SIZE
         )
+
         upload_time_metric = self._get_metric_by_name(
             stat_entry,
             StepS3FileUpload.METRIC_TRANSMISSION_TIME
@@ -294,7 +295,7 @@ class StepS3FileUpload(BaseFlowStep):
                     initial_value=0.0,
                     units_name="seconds"
                 )
-                metric.increment(time_interval(transmission_end_timestamp, transmission_start_timestamp))
+                metric.increment(time_interval(transmission_start_timestamp, transmission_end_timestamp))
 
                 self._first_uploads_key_name_per_files[upload_target.os_file_name] = dest_key_name
             else:
