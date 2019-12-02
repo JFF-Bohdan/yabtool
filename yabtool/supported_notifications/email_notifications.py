@@ -11,6 +11,7 @@ from botocore.exceptions import ClientError
 from yabtool.shared.base import AttrsToStringMixin
 from yabtool.shared.jinja2_helpers import create_rendering_environment
 from yabtool.supported_steps.base import pretty_time_delta, time_interval
+from yabtool.version import __version__
 
 
 class DataForEmailSending(AttrsToStringMixin):
@@ -155,7 +156,8 @@ class EmailRenderer(object):
             "only_dry_run": self.only_dry_run,
 
             "dry_run_metrics": dry_run_metrics,
-            "active_run_metrics": active_run_metrics
+            "active_run_metrics": active_run_metrics,
+            "yabtool_version": __version__
         }
 
         rendering_context = {**rendering_context, **self.additional_variables}
