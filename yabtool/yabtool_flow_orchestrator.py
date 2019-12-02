@@ -4,8 +4,8 @@ import datetime
 import os
 import uuid
 
-from jinja2 import BaseLoader, Environment, StrictUndefined
 import terminaltables
+from yabtool.shared.jinja2_helpers import create_rendering_environment
 from yaml import safe_load
 
 from .supported_steps import create_steps_factory
@@ -17,18 +17,6 @@ DEFAULT_CONFIG_RELATIVE_NAME = "./config/config.yaml"
 
 class ConfigurationValidationException(BaseException):
     pass
-
-
-def jinja2_custom_filter_extract_year_four_digits(value):
-    return value.strftime("%Y")
-
-
-def jinja2_custom_filter_extract_month_two_digits(value):
-    return value.strftime("%m")
-
-
-def jinja2_custom_filter_extract_day_two_digits(value):
-    return value.strftime("%d")
 
 
 class RenderingContext(object):
@@ -269,7 +257,7 @@ class YabtoolFlowOrchestrator(object):
 
         self.rendering_context.previous_steps_values = []
 
-        rendering_environment = self.create_rendering_environment()
+        rendering_environment = create_rendering_environment()
         secret_targets_context = self.rendering_context.secrets_context["targets"][self.target_name]
 
         self._execute_steps(dry_run, flow_data, rendering_environment, secret_targets_context)
@@ -472,17 +460,6 @@ class YabtoolFlowOrchestrator(object):
         res = res.replace(":", "")
         res = res.replace("-", "")
         return res
-
-    @staticmethod
-    def create_rendering_environment():
-        env = Environment(loader=BaseLoader, undefined=StrictUndefined)
-
-        env.filters["extract_year_four_digits"] = jinja2_custom_filter_extract_year_four_digits
-        env.filters["extract_month_two_digits"] = jinja2_custom_filter_extract_month_two_digits
-        env.filters["extract_day_two_digits"] = jinja2_custom_filter_extract_day_two_digits
-        env.filters["base_name"] = os.path.basename
-
-        return env
 
     @staticmethod
     def _load_yaml_file(file_name, codec="utf-8"):

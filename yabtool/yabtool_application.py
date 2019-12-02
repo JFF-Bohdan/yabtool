@@ -1,17 +1,15 @@
 import argparse
-import datetime
 import os
 import shutil
-import socket
+
 import sys
 
-import boto3
-from botocore.exceptions import ClientError
 import loguru
 from loguru._defaults import LOGURU_FORMAT
+from yabtool.supported_notifications.email_notifications import EmailRenderer, EmailSender
 from yabtool.version import __version__
 
-from .supported_steps.base import pretty_time_delta, time_interval
+
 from .yabtool_flow_orchestrator import YabtoolFlowOrchestrator
 
 
@@ -103,159 +101,11 @@ def get_cli_args():
     return parser.parse_known_args()
 
 
-class EmailNotifier(object):
-    def __init__(self, logger):
-        self.logger = logger
-        self.flow_orchestrator = None
-        self.notification_data = None
-        self.succeeded = None
-        self.exception = None
-        self.seconds_spent = None
-        self.only_dry_run = None
-
-    def run(self):
-        charset = "utf-8"
-
-        connection = self.notification_data.get("connection")
-        assert connection
-
-        region = connection.get("region")
-        assert region
-
-        connection_data = self.notification_data.get("connection")
-        assert connection_data
-
-        aws_access_key_id = connection_data.get("aws_access_key_id")
-        assert aws_access_key_id
-
-        aws_secret_access_key = connection_data.get("aws_secret_access_key")
-        assert aws_secret_access_key
-
-        client = boto3.client(
-            "ses",
-            region_name=region,
-            aws_access_key_id=aws_access_key_id,
-            aws_secret_access_key=aws_secret_access_key
-        )
-
-        timestamp_end = datetime.datetime.utcnow()
-        self.seconds_spent = time_interval(self.flow_orchestrator.backup_start_timestamp, timestamp_end)
-
-        sender = self.notification_data.get("sender")
-        assert sender
-
-        to_addresses = self.notification_data.get("to")
-        assert to_addresses
-        self.logger.info("sending email to: {}".format(to_addresses))
-
-        subject_template = self.notification_data.get("subject")
-        assert subject_template
-
-        plain_body_template = self.notification_data.get("body")
-        assert plain_body_template
-
-        subject, plain_body = self._render_plain_text_body(plain_body_template, subject_template)
-        self.logger.info("plain_body:\n{}".format(plain_body))
-
-        body_html = """<html>
-            <head></head>
-            <body>
-              <pre>{}</pre>
-            </body>
-            </html>
-            """.format(plain_body)
-
-        try:
-            self.logger.info("sending email to {}".format(to_addresses))
-            response = client.send_email(
-                Destination={
-                    "ToAddresses": [
-                        "; ".join(to_addresses),
-                    ],
-                },
-                Message={
-                    "Body": {
-                        "Html": {
-                            "Charset": charset,
-                            "Data": body_html,
-                        },
-                        "Text": {
-                            "Charset": charset,
-                            "Data": plain_body,
-                        },
-                    },
-                    "Subject": {
-                        "Charset": charset,
-                        "Data": subject,
-                    },
-                },
-                Source=sender
-                # If you are not using a configuration set, comment or delete the
-                # following line
-                # ConfigurationSetName=CONFIGURATION_SET,
-            )
-        # Display an error if something goes wrong.
-        except ClientError as e:
-            self.logger.error("Error sending email: {}".format(e.response["Error"]["Message"]))
-        except Exception as e:
-            self.logger.exception("Error sending email: {}".format(e))
-        else:
-            self.logger.info("Email sent! Message ID: {}".format(response["MessageId"]))
-
-    def _render_plain_text_body(self, plain_body_template, subject_template):
-        rendering_context = self.flow_orchestrator.rendering_context
-
-        dry_run_stat = self.flow_orchestrator.produce_exeuction_stat(self.flow_orchestrator.dry_run_statistics)
-        active_run_stat = self.flow_orchestrator.produce_exeuction_stat(self.flow_orchestrator.active_run_statistics)
-
-        dry_run_metrics_data_list = self.flow_orchestrator.produce_execution_metrics(
-            self.flow_orchestrator.dry_run_statistics
-        )
-        dry_run_metrics = ""
-        for step_name, metrics_data_item in dry_run_metrics_data_list:
-            dry_run_metrics += "\nMetrics for '{}':\n{}".format(step_name, metrics_data_item)
-        dry_run_metrics = str(dry_run_metrics).strip()
-
-        active_run_metrics_data_list = self.flow_orchestrator.produce_execution_metrics(
-            self.flow_orchestrator.active_run_statistics
-        )
-        active_run_metrics = ""
-        for step_name, metrics_data_item in active_run_metrics_data_list:
-            active_run_metrics += "\n\nMetrics for '{}':\n{}".format(step_name, metrics_data_item)
-        active_run_metrics = str(active_run_metrics).strip()
-
-        context = {
-            "backup_start_timestamp": self.flow_orchestrator.backup_start_timestamp,
-            "flow_name": rendering_context.flow_name,
-            "host_name": socket.gethostname(),
-            "flow_execution_succeeded": self.succeeded,
-            "str_flow_execution_status": ("succeeded" if self.succeeded else "failed"),
-            "time_spent": pretty_time_delta(self.seconds_spent),
-            "flow_exception": str(self.exception),
-
-            "dry_run_stat": dry_run_stat,
-            "active_run_stat": active_run_stat,
-            "only_dry_run": self.only_dry_run,
-
-            "dry_run_metrics": dry_run_metrics,
-            "active_run_metrics": active_run_metrics
-        }
-
-        rendering_environment = YabtoolFlowOrchestrator.create_rendering_environment()
-
-        body_jinja2_template = rendering_environment.from_string(plain_body_template)
-        subject_jinja2_template = rendering_environment.from_string(subject_template)
-
-        plain_body = body_jinja2_template.render(**context)
-        plain_subject = subject_jinja2_template.render(**context)
-
-        return plain_subject, plain_body
-
-
 class YabtoolApplication(object):
     def __init__(self):
         self.logger = None
         self.rendering_context = None
+        self._session_log_path = None
 
     def run(self):
         args, unknown_args = get_cli_args()
@@ -320,7 +170,7 @@ class YabtoolApplication(object):
         self.logger.debug("sending notifications for rules: {}".format(enabled_notifications))
         for notification_type, notification_data in enabled_notifications:
             if notification_type == "email":
-                email_notifier = EmailNotifier(self.logger)
+                email_notifier = EmailRenderer(self.logger)
 
                 email_notifier.flow_orchestrator = flow_orchestrator
                 email_notifier.notification_data = notification_data
@@ -328,7 +178,13 @@ class YabtoolApplication(object):
                 email_notifier.exception = exception
                 email_notifier.only_dry_run = only_dry_run
 
-                email_notifier.run()
+                rendered_data = email_notifier.render()
+                if self._session_log_path:
+                    rendered_data.attachments.append(self._session_log_path)
+
+                sender = EmailSender(self.logger, notification_data)
+                sender.send(rendered_data)
+
             else:
                 self.logger.error("unsupported notification type: '{}'".format(notification_type))
 
@@ -373,6 +229,7 @@ class YabtoolApplication(object):
 
         session_log_suffix = timestamp_begin.strftime("%Y-%m-%dT%H%M%S")
         path = os.path.join(logs_folder, "session_{}.log".format(session_log_suffix))
+        self._session_log_path = path
         self.logger.add(path, level=args.log_level)
 
     def _remove_temporary_folder(self, folder_name):

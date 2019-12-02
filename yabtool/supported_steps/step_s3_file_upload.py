@@ -3,23 +3,17 @@ import os
 import re
 
 import boto3
+from yabtool.shared.base import AttrsToStringMixin
 
 from .base import BaseFlowStep, DryRunExecutionError, time_interval, TransmissionError
 from .s3boto_client import S3BasicBotoClient
 
 
-class UploadTarget(object):
+class UploadTarget(AttrsToStringMixin):
     def __init__(self):
         self.source_file = None
         self.add_dedup_tag = False
         self.os_file_name = None
-
-    def __repr__(self):
-        data = ["{}={}".format(k, v) for k, v in self.__dict__.items()]
-        return "{}({})".format(self.__class__.__name__, ", ".join(data))
-
-    def __str__(self):
-        return self.__repr__()
 
 
 class StepS3FileUpload(BaseFlowStep):
