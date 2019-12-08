@@ -478,7 +478,7 @@ class YabtoolFlowOrchestrator(object):
         return secrets_file_name
 
     def _init_basic_values(self):
-        res = dict()
+        res = self._get_additional_rendering_variables()
 
         res["main_target_name"] = self.rendering_context.target_name
         res["week_day_short_name"] = self._backup_start_timestamp.strftime("%a")
@@ -498,6 +498,14 @@ class YabtoolFlowOrchestrator(object):
 
         res["lower"] = str.lower
         res["upper"] = str.upper
+
+        return res
+
+    def _get_additional_rendering_variables(self):
+        targets_context = self.rendering_context.secrets_context["targets"][self.target_name]
+
+        res = targets_context.get("additional_variables", {})
+        self.logger.info("additional variables: {}".format(res))
 
         return res
 

@@ -142,7 +142,9 @@ class EmailRenderer(object):
             active_run_metrics += "\n\nMetrics for '{}':\n{}".format(step_name, metrics_data_item)
         active_run_metrics = str(active_run_metrics).strip()
 
-        rendering_context = {
+        rendering_context = flow_context.to_context()
+
+        new_values = {
             "backup_start_timestamp": self.flow_orchestrator.backup_start_timestamp,
             "flow_name": flow_context.flow_name,
             "host_name": socket.gethostname(),
@@ -160,6 +162,7 @@ class EmailRenderer(object):
             "yabtool_version": __version__
         }
 
+        rendering_context = {**rendering_context, **new_values}
         rendering_context = {**rendering_context, **self.additional_variables}
 
         res.sender = self.notification_data.get("sender")
