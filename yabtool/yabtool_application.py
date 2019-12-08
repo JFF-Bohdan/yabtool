@@ -146,7 +146,7 @@ class YabtoolApplication(object):
             self._send_notifications(flow_orchestrator, only_dry_run=only_dry_run)
 
         except BaseException as e:
-            self.logger.exception("Error performing flow: {}".format(e))
+            self.logger.exception("Error performing flow. Exception: {}".format(e))
             self._send_notifications(flow_orchestrator, succeeded=False, exception=e, only_dry_run=only_dry_run)
 
         finally:

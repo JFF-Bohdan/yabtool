@@ -2,74 +2,111 @@ parameters:
   remove_temporary_folder: true
   perform_dry_run: true
 
+predefined_steps:
+  mkdir_for_backup_step_config: &mkdir_for_backup_step_config
+    name: "mkdir_for_backup"
+    human_readable_name: "Make directory for backup"
+    description: "Makes directory for backup output"
+    generation_mask: "{{yabtool_exec_folder}}/{{main_target_name}}/{{current_date}}T{{current_time}}_{{main_target_name}}_backup"
+    generates:
+      output_folder_name: "{{result}}"
+  firebird_backup: &firebird_backup
+    name: "firebird_backup"
+    human_readable_name: "Firebird database backup"
+    command_template: "gbak -backup_database -user {{user_name}} -password {{password}} -verbose -y {{output_folder_name}}/{{backup_log_name}} {{database_host}}:{{database_path}} {{output_folder_name}}/{{backup_file_name}}"
+    backup_log_name: "backup.log"
+    backup_file_name: "{{main_target_name}}.fbk"
+    dry_run_command: "gbak -z"
+    generates:
+      backup_file_name: "{{backup_file_name}}"
+  calculate_file_hash_and_save_in_file: &calculate_file_hash_and_save_in_file_1
+    name: "calculate_file_hash_and_save_in_file"
+    human_readable_name: "Calculate hash for file"
+    input_file_name: "{{output_folder_name}}/{{backup_file_name}}"
+    output_file_name: "{{output_folder_name}}/{{backup_file_name}}.sha256"
+    file_name_in_validation_file: "{{backup_file_name}}"
+    hash_type: "sha256"
+  7z_compress: &7z_compress
+    name: "7z_compress"
+    human_readable_name: "Compress with 7z"
+    command_template: "7z a {{output_archive_name}} -p{{archive_password}} -mhe -t7z  {{output_folder_name}}"
+    output_archive_name: "{{output_folder_name}}.7z"
+    dry_run_command: "7z"
+    generates:
+      output_archive_extension: "7z"
+      output_archive_name: "{{output_archive_name}}"
+  calculate_file_hash_and_save_in_file: &calculate_file_hash_and_save_in_file_2
+    name: "calculate_file_hash_and_save_in_file"
+    human_readable_name: "Calculate hash for file"
+    input_file_name: "{{output_archive_name}}"
+    output_file_name: "{{output_archive_name}}.sha256"
+    file_name_in_validation_file: "{{backup_file_name}}"
+    hash_type: "sha256"
+    generates:
+      output_archive_hash_file_name: "{{output_file_name}}"
+  validate_7z_archive: &validate_7z_archive
+    name: "validate_7z_archive"
+    human_readable_name: "Validate 7z archive"
+    command_template: "7z t {{output_archive_name}} * -r -p{{archive_password}}"
+    dry_run_command: "7z"
+    relative_secrets:
+      - 7z_compress
+  s3_multipart_upload_with_rotation: &s3_multipart_upload_with_rotation
+    name: "s3_multipart_upload_with_rotation"
+    human_readable_name: "Upload to S3 with rotation"
+    target_prefix_in_bucket: "{{prefix_in_bucket}}{{main_target_name}}"
+    source_files:
+      - source_file: "{{output_archive_name}}"
+        add_dedup_tag: true
+      - source_file: "{{output_archive_hash_file_name}}"
+        add_dedup_tag: false
+    upload_rules:
+      - name: "weekdays"
+        description: "upload for week day name, one per each weekday"
+        destination_prefix: "{{target_prefix_in_bucket}}/weekdays/{{week_day_short_name | lower}}"
+        dedup_tag_name: "flag_{{current_date}}_{{week_day_short_name}}_{{main_target_name | lower}}.{{output_archive_extension | lower}}"
+        dedup_tag_value: "flag used to prevent from transmission of same file"
+      - name: "weekly"
+        description: "upload per week number in year"
+        destination_prefix: "{{target_prefix_in_bucket}}/weeks/{{week_number}}"
+        dedup_tag_name: "flag_{{current_year}}_{{week_number}}_{{main_target_name}}.{{output_archive_extension}}"
+        dedup_tag_value: "flag used to prevent from transmission of same file"
+      - name: "monthly"
+        description: "upload per month name"
+        destination_prefix: "{{target_prefix_in_bucket}}/monthly/{{month_two_digit_number}}-{{month_short_name | lower}}"
+        dedup_tag_name: "flag_{{current_year}}_{{month_short_name | lower}}_{{main_target_name}}.{{output_archive_extension}}"
+        dedup_tag_value: "flag used to prevent from transmission of same file"
+  step_s3_strict_upload: &step_s3_strict_upload
+    name: "step_s3_strict_upload"
+    human_readable_name: "Upload to S3 bucker strictly (without rotation)"
+    target_prefix_in_bucket: "{{prefix_in_bucket}}{{main_target_name}}"
+    source_files:
+      - source_file: "{{output_archive_name}}"
+        add_dedup_tag: true
+      - source_file: "{{output_archive_hash_file_name}}"
+        add_dedup_tag: false
+
 flows:
-  fb7zs3-flow:
+  fb7zs3rotation-flow:
     description: "Backup of firebird databases with further compression using 7z and upload to the S3 storage"
     human_readable_name: "FB backup with S3 upload with rotation"
     steps:
-      - name: "mkdir_for_backup"
-        human_readable_name: "Make directory for backup"
-        description: "Makes directory for backup output"
-        generation_mask: "{{yabtool_exec_folder}}/{{main_target_name}}/{{current_date}}T{{current_time}}_{{main_target_name}}_backup"
-        generates:
-          output_folder_name: "{{result}}"
-      - name: "firebird_backup"
-        human_readable_name: "Firebird database backup"
-        command_template: "gbak -backup_database -user {{user_name}} -password {{password}} -verbose -y {{output_folder_name}}/{{backup_log_name}} {{database_host}}:{{database_path}} {{output_folder_name}}/{{backup_file_name}}"
-        backup_log_name: "backup.log"
-        backup_file_name: "{{main_target_name}}.fbk"
-        dry_run_command: "gbak -z"
-        generates:
-          backup_file_name: "{{backup_file_name}}"
-      - name: "calculate_file_hash_and_save_in_file"
-        human_readable_name: "Calculate hash for file"
-        input_file_name: "{{output_folder_name}}/{{backup_file_name}}"
-        output_file_name: "{{output_folder_name}}/{{backup_file_name}}.sha256"
-        file_name_in_validation_file: "{{backup_file_name}}"
-        hash_type: "sha256"
-      - name: "7z_compress"
-        human_readable_name: "Compress with 7z"
-        command_template: "7z a {{output_archive_name}} -p{{archive_password}} -mhe -t7z  {{output_folder_name}}"
-        output_archive_name: "{{output_folder_name}}.7z"
-        dry_run_command: "7z"
-        generates:
-          output_archive_extension: "7z"
-          output_archive_name: "{{output_archive_name}}"
-      - name: "calculate_file_hash_and_save_in_file"
-        human_readable_name: "Calculate hash for file"
-        input_file_name: "{{output_archive_name}}"
-        output_file_name: "{{output_archive_name}}.sha256"
-        file_name_in_validation_file: "{{backup_file_name}}"
-        hash_type: "sha256"
-        generates:
-          output_archive_hash_file_name: "{{output_file_name}}"
-      - name: "validate_7z_archive"
-        human_readable_name: "Validate 7z archive"
-        command_template: "7z t {{output_archive_name}} * -r -p{{archive_password}}"
-        dry_run_command: "7z"
-        relative_secrets:
-          - 7z_compress
-      - name: "s3_multipart_upload"
-        human_readable_name: "Upload to S3 with rotation"
-        target_prefix_in_bucket: "{{prefix_in_bucket}}{{main_target_name}}"
-        source_files:
-          - source_file: "{{output_archive_name}}"
-            add_dedup_tag: true
-          - source_file: "{{output_archive_hash_file_name}}"
-            add_dedup_tag: false
-        upload_rules:
-          - name: "weekdays"
-            description: "upload for week day name, one per each weekday"
-            destination_prefix: "{{target_prefix_in_bucket}}/weekdays/{{week_day_short_name | lower}}"
-            dedup_tag_name: "flag_{{current_date}}_{{week_day_short_name}}_{{main_target_name | lower}}.{{output_archive_extension | lower}}"
-            dedup_tag_value: "flag used to prevent from transmission of same file"
-          - name: "weekly"
-            description: "upload per week number in year"
-            destination_prefix: "{{target_prefix_in_bucket}}/weeks/{{week_number}}"
-            dedup_tag_name: "flag_{{current_year}}_{{week_number}}_{{main_target_name}}.{{output_archive_extension}}"
-            dedup_tag_value: "flag used to prevent from transmission of same file"
-          - name: "monthly"
-            description: "upload per month name"
-            destination_prefix: "{{target_prefix_in_bucket}}/monthly/{{month_two_digit_number}}-{{month_short_name | lower}}"
-            dedup_tag_name: "flag_{{current_year}}_{{month_short_name | lower}}_{{main_target_name}}.{{output_archive_extension}}"
-            dedup_tag_value: "flag used to prevent from transmission of same file"
+      - <<: *mkdir_for_backup_step_config
+      - <<: *firebird_backup
+      - <<: *calculate_file_hash_and_save_in_file_1
+      - <<: *7z_compress
+      - <<: *calculate_file_hash_and_save_in_file_2
+      - <<: *validate_7z_archive
+      - <<: *s3_multipart_upload_with_rotation
+
+  fb7zs3strict-flow:
+    description: "Backup of firebird databases with further compression using 7z and upload to the S3 storage"
+    human_readable_name: "FB backup with with strict S3 upload"
+    steps:
+      - <<: *mkdir_for_backup_step_config
+      - <<: *firebird_backup
+      - <<: *calculate_file_hash_and_save_in_file_1
+      - <<: *7z_compress
+      - <<: *calculate_file_hash_and_save_in_file_2
+      - <<: *validate_7z_archive
+      - <<: *step_s3_strict_upload

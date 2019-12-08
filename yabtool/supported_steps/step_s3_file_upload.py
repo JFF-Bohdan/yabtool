@@ -16,14 +16,53 @@ class UploadTarget(AttrsToStringMixin):
         self.os_file_name = None
 
 
-class StepS3FileUpload(BaseFlowStep):
+class StepS3FileBaseUploader(BaseFlowStep):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def _crete_s3_client(self):
+        region = self.secret_context.get("region")
+        self.logger.debug("S3 region: '{}'".format(region))
+
+        return boto3.client(
+            "s3",
+            region_name=region,
+            aws_access_key_id=self.secret_context["aws_access_key_id"],
+            aws_secret_access_key=self.secret_context["aws_secret_access_key"]
+        )
+
+    def _get_tagged_object_key(
+        self,
+        basic_client,
+        bucket_name,
+        destination_prefix,
+        validation_tag_name,
+        validation_tag_value
+    ):
+        objects_for_prefix = basic_client.list_files_in_folder(bucket_name, destination_prefix)
+
+        for object_key in objects_for_prefix:
+            object_tags = basic_client.get_object_tags(bucket_name, object_key)
+
+            self.logger.debug("tags for key '{}': {}".format(object_key, object_tags))
+
+            if validation_tag_name not in object_tags:
+                continue
+
+            if object_tags[validation_tag_name] == validation_tag_value:
+                return object_key
+
+        return None
+
+
+class StepS3FileUpload(StepS3FileBaseUploader):
     S3_BUCKET_NAME_REGEX = r"^[a-zA-Z0-9.\-_]{1,255}$"
 
     METRIC_UPLOADED_OBJECTS_COUNT = "Uploaded Objects"
     METRIC_UPLOADED_SIZE = "Uploaded Size"
     METRIC_TRANSMISSION_TIME = "Transmission Time"
     METRIC_TRANSMISSION_SPEED = "Transmission Speed"
-    METRIC_COPIED_OBJECTS_COUNT = "Copied Speed"
+    METRIC_COPIED_OBJECTS_COUNT = "Copied Objects Count"
     METRIC_DELETED_OBJECTS_COUNT = "Deleted Objects Count"
 
     def __init__(self, **kwargs):
@@ -63,8 +102,6 @@ class StepS3FileUpload(BaseFlowStep):
         return True
 
     def run(self, stat_entry, dry_run=False):
-        self.logger.debug("self.secret_context: {}".format(self.secret_context))
-
         bucket_name = self.secret_context["bucket_name"]
         self.logger.debug("bucket_name: '{}'".format(bucket_name))
 
@@ -154,17 +191,6 @@ class StepS3FileUpload(BaseFlowStep):
             res.append(res_item)
 
         return res
-
-    def _crete_s3_client(self):
-        region = self.secret_context.get("region")
-        self.logger.debug("S3 region: '{}'".format(region))
-
-        return boto3.client(
-            "s3",
-            region_name=region,
-            aws_access_key_id=self.secret_context["aws_access_key_id"],
-            aws_secret_access_key=self.secret_context["aws_secret_access_key"]
-        )
 
     def _can_skip_execution_for_rule(
         self,
@@ -329,29 +355,6 @@ class StepS3FileUpload(BaseFlowStep):
 
         self._remove_files_existing_for_rule(stat_entry, basic_client, bucket_name, existing_files_for_rule)
 
-    def _get_tagged_object_key(
-        self,
-        basic_client,
-        bucket_name,
-        destination_prefix,
-        validation_tag_name,
-        validation_tag_value
-    ):
-        objects_for_prefix = basic_client.list_files_in_folder(bucket_name, destination_prefix)
-
-        for object_key in objects_for_prefix:
-            object_tags = basic_client.get_object_tags(bucket_name, object_key)
-
-            self.logger.debug("tags for key '{}': {}".format(object_key, object_tags))
-
-            if validation_tag_name not in object_tags:
-                continue
-
-            if object_tags[validation_tag_name] == validation_tag_value:
-                return object_key
-
-        return None
-
     def _load_already_existing_files_for_rule(self, basic_client, bucket_name, destination_prefix):
         self.logger.debug("checking for files that already exists in bucket")
         existing_files_for_rule = basic_client.list_files_in_folder(bucket_name, destination_prefix)
@@ -396,4 +399,4 @@ class StepS3FileUpload(BaseFlowStep):
 
     @classmethod
     def step_name(cls):
-        return "s3_multipart_upload"
+        return "s3_multipart_upload_with_rotation"
