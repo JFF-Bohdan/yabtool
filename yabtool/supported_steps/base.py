@@ -99,7 +99,7 @@ class BaseFlowStep(object):
         return mixed_context
 
     def _get_step_context(self):
-        return {**self.step_context, **self.secret_context}
+        return {**self.secret_context, **self.step_context}
 
     def _render_result(self, template, additional_context=None):
         if not template:

@@ -4,5 +4,6 @@ from .step_calculate_file_hash_and_save_to_file import StepCalculateFileHashAndS
 from .step_compress_file_with_7z import StepCompressFileWith7Z
 from .step_make_directory_for_backup import StepMakeDirectoryForBackup
 from .step_make_firebird_database_backup import StepMakeFirebirdDatabaseBackup
-from .step_s3_file_upload import StepS3FileUpload
+from .step_s3_multipart_upload_with_rotation import StepS3MultipartUploadWithRotation
 from .step_validate_7z_archive import StepValidate7ZArchive
+from .step_s3_strict_uploader import StepS3StrictUploader

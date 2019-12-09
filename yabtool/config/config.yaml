@@ -79,12 +79,10 @@ predefined_steps:
   step_s3_strict_upload: &step_s3_strict_upload
     name: "step_s3_strict_upload"
     human_readable_name: "Upload to S3 bucker strictly (without rotation)"
-    target_prefix_in_bucket: "{{prefix_in_bucket}}{{main_target_name}}"
-    source_files:
+    target_prefix_in_bucket: "{{prefix_in_bucket}}{{main_target_name}}/strict/{{current_date}}_{{current_time}}{{execution_suffix}}/"
+    uploads:
       - source_file: "{{output_archive_name}}"
-        add_dedup_tag: true
       - source_file: "{{output_archive_hash_file_name}}"
-        add_dedup_tag: false
 
 flows:
   fb7zs3rotation-flow:
