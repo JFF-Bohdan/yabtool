@@ -23,9 +23,17 @@ class StepContextData(object):
 def pretty_time_delta(seconds):
     sign_string = "-" if seconds < 0 else ""
     seconds = abs(seconds)
+
     days, seconds = divmod(seconds, 86400)
+    days = int(days)
+
     hours, seconds = divmod(seconds, 3600)
+    hours = int(hours)
+
     minutes, seconds = divmod(seconds, 60)
+    minutes = int(minutes)
+
+    seconds = round(seconds, 3)
 
     if days > 0:
         return "{}{}d{}h{}m{}s".format(sign_string, days, hours, minutes, seconds)

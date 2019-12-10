@@ -164,6 +164,7 @@ class YabtoolFlowOrchestrator(object):
 
         total_time_elapsed_seconds = 0
         max_length = len(data[0]) if data else 0
+        print_format = "%Y-%m-%d %H:%M:%S"
         for statistics_item in stat_source:
             # step_name = "{} ({})".format(statistics_item.step_human_readable_name, statistics_item.step_name)
             step_name = statistics_item.step_name
@@ -174,8 +175,8 @@ class YabtoolFlowOrchestrator(object):
 
             data_row = [
                 step_name,
-                statistics_item.execution_start_timestamp.isoformat(),
-                statistics_item.execution_end_timestamp.isoformat(),
+                statistics_item.execution_start_timestamp.strftime(print_format),
+                statistics_item.execution_end_timestamp.strftime(print_format),
                 pretty_time_delta(time_elapsed_in_seconds)
             ]
 
