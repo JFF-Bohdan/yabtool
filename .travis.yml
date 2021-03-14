@@ -4,6 +4,8 @@ python:
 - 3.5
 - 3.6
 - 3.7
+- 3.8
+- 3.9
 install:
 - pip install -r requirements-dev.txt
 - pip install coveralls
@@ -23,4 +25,4 @@ deploy:
   on:
     tags: false
     branch: master
-    condition: $TRAVIS_PYTHON_VERSION = "3.6"
+    condition: $TRAVIS_PYTHON_VERSION = "3.9"

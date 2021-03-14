@@ -109,7 +109,7 @@ class YabtoolApplication(object):
     def run(self):
         args, unknown_args = get_cli_args()
         self._initialize_logger(args)
-        self.logger.debug("unknown command line arguments: {}".format(unknown_args))
+        self.logger.debug(f"Unknown command line arguments: {unknown_args}")
 
         flow_orchestrator = YabtoolFlowOrchestrator(self.logger)
 

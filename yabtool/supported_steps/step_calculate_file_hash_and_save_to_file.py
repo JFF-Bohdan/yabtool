@@ -7,7 +7,6 @@ from .base import BaseFlowStep, DryRunExecutionError
 
 
 class StepCalculateFileHashAndSaveToFile(BaseFlowStep):
-
     def run(self, stat_entry, dry_run=False):
         input_file_name = self._render_parameter("input_file_name")
         self.step_context["input_file_name"] = input_file_name
@@ -17,13 +16,13 @@ class StepCalculateFileHashAndSaveToFile(BaseFlowStep):
 
         hash_type = self.step_context["hash_type"]
         algorithms_available = [str(item).lower() for item in hashlib.algorithms_available]
-        self.logger.debug("algorithms_available: {}".format(algorithms_available))
+        self.logger.debug(f"algorithms_available: {algorithms_available}")
 
         if hash_type not in algorithms_available:
-            raise DryRunExecutionError("unsupported hash type '{}'".format(hash_type))
+            raise DryRunExecutionError(f"unsupported hash type '{hash_type}'")
 
         if not dry_run:
-            self.logger.info("calculating hash ('{}') for '{}'".format(hash_type, input_file_name))
+            self.logger.info(f"calculating hash ('{hash_type}') for '{input_file_name}'")
 
             hashing_begin_timestamp = datetime.datetime.utcnow()
             hash_value = self._hash_file(input_file_name, hash_type)
@@ -37,16 +36,17 @@ class StepCalculateFileHashAndSaveToFile(BaseFlowStep):
 
             metric = self._get_metric_by_name(stat_entry, "File Size", units_name="MiB")
             size_in_mibs = self._get_file_size_in_mibs(input_file_name)
-            metric.value = "{:.2f}".format(size_in_mibs)
+            metric.value = f"{size_in_mibs:.2f}"
 
             metric = self._get_metric_by_name(stat_entry, "Hash Speed", units_name="MiB/s")
             spent_time = (hashing_end_timestamp - hashing_begin_timestamp).total_seconds()
 
             megs_per_second = (size_in_mibs / spent_time) if spent_time else "N/A"
 
-            metric.value = "{:.2f}".format(megs_per_second)
+            if megs_per_second != "N/A":
+                metric.value = f"{megs_per_second:.2f}"
 
-            output_data = "{} *{}\n".format(hash_value, os.path.basename(input_file_name))
+            output_data = "{hash_value} *{os.path.basename(input_file_name)}\n"
             self._save_data(output_file_name, output_data)
 
         return super().run(dry_run)

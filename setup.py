@@ -12,7 +12,8 @@ PACKAGE_NAME = "yabtool"
 README_FILE = "README.md"
 install_reqs = parse_requirements("requirements.txt", session=False)
 
-requirements = [str(ir.req) for ir in install_reqs if ir and ir.req and str(ir.req).strip()]
+requirements = [str(ir.requirement) for ir in install_reqs
+                if ir and ir.requirement and str(ir.requirement).strip()]
 hyphen_package_name = PACKAGE_NAME.replace("_", "-")
 LONG_DESCTIPTION = "Please read https://github.com/JFF-Bohdan/yabtool/blob/master/README.md for information"
 

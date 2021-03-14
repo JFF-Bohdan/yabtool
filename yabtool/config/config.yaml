@@ -19,7 +19,16 @@ predefined_steps:
     dry_run_command: "gbak -z"
     generates:
       backup_file_name: "{{backup_file_name}}"
-  calculate_file_hash_and_save_in_file: &calculate_file_hash_and_save_in_file_1
+  pg_win_backup: &pg_win_backup
+    name: "pg_win_backup"
+    human_readable_name: "PostgeSQL database backup (Windows OS)"
+    command_template: "pg_dump -v -h {{db_host}} -p {{db_port}} -U {{db_user_name}} -b -v -f {{output_folder_name}}/{{backup_file_name}} {{db_name}}"
+    backup_log_name: "{{output_folder_name}}/backup.log"
+    backup_file_name: "{{main_target_name}}.sql"
+    dry_run_command: "pg_dump --version"
+    generates:
+      backup_file_name: "{{backup_file_name}}"
+  calculate_file_hash_and_save_in_file_1: &calculate_file_hash_and_save_in_file_1
     name: "calculate_file_hash_and_save_in_file"
     human_readable_name: "Calculate hash for file"
     input_file_name: "{{output_folder_name}}/{{backup_file_name}}"
@@ -35,7 +44,7 @@ predefined_steps:
     generates:
       output_archive_extension: "7z"
       output_archive_name: "{{output_archive_name}}"
-  calculate_file_hash_and_save_in_file: &calculate_file_hash_and_save_in_file_2
+  calculate_file_hash_and_save_in_file_2: &calculate_file_hash_and_save_in_file_2
     name: "calculate_file_hash_and_save_in_file"
     human_readable_name: "Calculate hash for file"
     input_file_name: "{{output_archive_name}}"
@@ -86,8 +95,8 @@ predefined_steps:
 
 flows:
   fb7zs3rotation-flow:
-    description: "Backup of firebird databases with further compression using 7z and upload to the S3 storage"
-    human_readable_name: "FB backup with S3 upload with rotation"
+    description: "Backup of Firebird databases with further compression using 7z and uploading to the S3 storage"
+    human_readable_name: "FB backup and uploading to the S3 bucket with rotation"
     steps:
       - <<: *mkdir_for_backup_step_config
       - <<: *firebird_backup
@@ -98,8 +107,8 @@ flows:
       - <<: *s3_multipart_upload_with_rotation
 
   fb7zs3strict-flow:
-    description: "Backup of firebird databases with further compression using 7z and upload to the S3 storage"
-    human_readable_name: "FB backup with with strict S3 upload"
+    description: "Backup of Firebird databases with further compression using 7z and uploading to the S3 storage"
+    human_readable_name: "FB backup and uploading to the S3 bucket with rotation"
     steps:
       - <<: *mkdir_for_backup_step_config
       - <<: *firebird_backup
@@ -108,3 +117,15 @@ flows:
       - <<: *calculate_file_hash_and_save_in_file_2
       - <<: *validate_7z_archive
       - <<: *step_s3_strict_upload
+
+  pg7zs3rotation-flow:
+    description: "Backup of PostgreSQL databases with further compression using 7z and uploading to the S3 storage"
+    human_readable_name: "PG backup and uploading to the S3 bucket with rotation"
+    steps:
+      - <<: *mkdir_for_backup_step_config
+      - <<: *pg_win_backup
+      - <<: *calculate_file_hash_and_save_in_file_1
+      - <<: *7z_compress
+      - <<: *calculate_file_hash_and_save_in_file_2
+      - <<: *validate_7z_archive
+      - <<: *s3_multipart_upload_with_rotation
