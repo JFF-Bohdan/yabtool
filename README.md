@@ -1,4 +1,7 @@
 # yabtool
+
+![Build status](https://travis-ci.org/JFF-Bohdan/yabtool.svg?branch=master "Build status from Travis CI")
+
 Yet Another Backup Tool - backup tool with configurable flow.
 
 Backup tool with ability to execute different backup flows made with

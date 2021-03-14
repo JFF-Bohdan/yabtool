@@ -9,7 +9,8 @@ exclude =
 	__init__.py,
 	test.py,
 	bp/*,
-	tests/*
+	tests/*,
+	./build
 max-line-length = 120
 max-complexity = 10
 filename = *.py
