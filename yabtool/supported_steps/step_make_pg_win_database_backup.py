@@ -25,7 +25,7 @@ class StepMakePgDatabaseWinBackup(BaseFlowStep):
             self.logger.debug("going to execute: {}".format(dry_run_command))
             result = ThirdPartyCommandsExecutor.execute(dry_run_command)
 
-        del os.environ['PGPASSWORD']
+        del os.environ["PGPASSWORD"]
 
         if not dry_run:
             backup_log_name = self._render_parameter("backup_log_name")

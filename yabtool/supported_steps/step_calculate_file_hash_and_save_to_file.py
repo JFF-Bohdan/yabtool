@@ -46,7 +46,7 @@ class StepCalculateFileHashAndSaveToFile(BaseFlowStep):
             if megs_per_second != "N/A":
                 metric.value = f"{megs_per_second:.2f}"
 
-            output_data = "{hash_value} *{os.path.basename(input_file_name)}\n"
+            output_data = f"{hash_value} *{os.path.basename(input_file_name)}\n"
             self._save_data(output_file_name, output_data)
 
         return super().run(dry_run)
