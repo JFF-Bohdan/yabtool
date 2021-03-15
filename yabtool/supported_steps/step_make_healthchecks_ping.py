@@ -11,7 +11,7 @@ class StepMakeHealthchecksPing(BaseFlowStep):
             if healthchecks_io_url:
                 requests.post(healthchecks_io_url)
             else:
-                self.logger.warning(f"No healthcheck endpoint added for ping")
+                self.logger.warning("No healthcheck endpoint added for ping")
         else:
             self.logger.info("Skipping ping to healthchecks.io because of dry run")
             return
