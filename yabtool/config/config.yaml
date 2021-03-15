@@ -3,6 +3,7 @@ parameters:
   perform_dry_run: true
 
 predefined_steps:
+
   mkdir_for_backup_step_config: &mkdir_for_backup_step_config
     name: "mkdir_for_backup"
     human_readable_name: "Make directory for backup"
@@ -10,6 +11,7 @@ predefined_steps:
     generation_mask: "{{yabtool_exec_folder}}/{{main_target_name}}/{{current_date}}T{{current_time}}_{{main_target_name}}_backup"
     generates:
       output_folder_name: "{{result}}"
+
   firebird_backup: &firebird_backup
     name: "firebird_backup"
     human_readable_name: "Firebird database backup"
@@ -19,6 +21,7 @@ predefined_steps:
     dry_run_command: "gbak -z"
     generates:
       backup_file_name: "{{backup_file_name}}"
+
   pg_win_backup: &pg_win_backup
     name: "pg_win_backup"
     human_readable_name: "PostgeSQL database backup (Windows OS)"
@@ -28,6 +31,7 @@ predefined_steps:
     dry_run_command: "pg_dump --version"
     generates:
       backup_file_name: "{{backup_file_name}}"
+
   calculate_file_hash_and_save_in_file_1: &calculate_file_hash_and_save_in_file_1
     name: "calculate_file_hash_and_save_in_file"
     human_readable_name: "Calculate hash for file"
@@ -35,6 +39,7 @@ predefined_steps:
     output_file_name: "{{output_folder_name}}/{{backup_file_name}}.sha256"
     file_name_in_validation_file: "{{backup_file_name}}"
     hash_type: "sha256"
+
   7z_compress: &7z_compress
     name: "7z_compress"
     human_readable_name: "Compress with 7z"
@@ -44,6 +49,7 @@ predefined_steps:
     generates:
       output_archive_extension: "7z"
       output_archive_name: "{{output_archive_name}}"
+
   calculate_file_hash_and_save_in_file_2: &calculate_file_hash_and_save_in_file_2
     name: "calculate_file_hash_and_save_in_file"
     human_readable_name: "Calculate hash for file"
@@ -53,6 +59,10 @@ predefined_steps:
     hash_type: "sha256"
     generates:
       output_archive_hash_file_name: "{{output_file_name}}"
+
+  healthchecks_ping: &healthchecks_ping
+    name: "healthchecks_ping"
+
   validate_7z_archive: &validate_7z_archive
     name: "validate_7z_archive"
     human_readable_name: "Validate 7z archive"
@@ -60,6 +70,7 @@ predefined_steps:
     dry_run_command: "7z"
     relative_secrets:
       - 7z_compress
+
   s3_multipart_upload_with_rotation: &s3_multipart_upload_with_rotation
     name: "s3_multipart_upload_with_rotation"
     human_readable_name: "Upload to S3 with rotation"
@@ -85,6 +96,7 @@ predefined_steps:
         destination_prefix: "{{target_prefix_in_bucket}}/monthly/{{month_two_digit_number}}-{{month_short_name | lower}}"
         dedup_tag_name: "flag_{{current_year}}_{{month_short_name | lower}}_{{main_target_name}}.{{output_archive_extension}}"
         dedup_tag_value: "flag used to prevent from transmission of same file"
+
   step_s3_strict_upload: &step_s3_strict_upload
     name: "step_s3_strict_upload"
     human_readable_name: "Upload to S3 bucker strictly (without rotation)"
@@ -94,6 +106,7 @@ predefined_steps:
       - source_file: "{{output_archive_hash_file_name}}"
 
 flows:
+
   fb7zs3rotation-flow:
     description: "Backup of Firebird databases with further compression using 7z and uploading to the S3 storage"
     human_readable_name: "FB backup and uploading to the S3 bucket with rotation"
@@ -129,3 +142,4 @@ flows:
       - <<: *calculate_file_hash_and_save_in_file_2
       - <<: *validate_7z_archive
       - <<: *s3_multipart_upload_with_rotation
+      - <<: *healthchecks_ping
