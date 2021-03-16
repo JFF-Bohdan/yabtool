@@ -12,7 +12,7 @@ from yabtool.version import __version__
 from .yabtool_flow_orchestrator import YabtoolFlowOrchestrator
 
 
-def get_cli_args():
+def get_cli_args(args=None):
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
@@ -97,7 +97,7 @@ def get_cli_args():
         help="Add session log file"
     )
 
-    return parser.parse_known_args()
+    return parser.parse_known_args(args=args)
 
 
 class YabtoolApplication(object):
@@ -106,8 +106,8 @@ class YabtoolApplication(object):
         self.rendering_context = None
         self._session_log_path = None
 
-    def run(self):
-        args, unknown_args = get_cli_args()
+    def run(self, args=None):
+        args, unknown_args = get_cli_args(args=args)
         self._initialize_logger(args)
         self.logger.debug(f"Unknown command line arguments: {unknown_args}")
 

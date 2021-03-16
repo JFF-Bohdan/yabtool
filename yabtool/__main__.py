@@ -8,7 +8,7 @@ if __name__ == "__main__":
     timestamp_start = datetime.datetime.utcnow()
 
     app = YabtoolApplication()
-    app.run()
+    app.run(args=None)
 
     timestamp_end = datetime.datetime.utcnow()
     seconds_spent = time_interval(timestamp_start, timestamp_end)
