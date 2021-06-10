@@ -32,3 +32,9 @@ class StepMakeFirebirdDatabaseBackup(BaseFlowStep):
     @classmethod
     def step_name(cls):
         return "firebird_backup"
+
+
+class StepMakeFirebirdLinuxDatabaseBackup(StepMakeFirebirdDatabaseBackup):
+    @classmethod
+    def step_name(cls):
+        return "linux_firebird_backup"

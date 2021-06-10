@@ -1,7 +1,7 @@
 from .step_calculate_file_hash_and_save_to_file import StepCalculateFileHashAndSaveToFile
 from .step_compress_file_with_7z import StepCompressFileWith7Z
 from .step_make_directory_for_backup import StepMakeDirectoryForBackup
-from .step_make_firebird_database_backup import StepMakeFirebirdDatabaseBackup
+from .step_make_firebird_database_backup import StepMakeFirebirdDatabaseBackup, StepMakeFirebirdLinuxDatabaseBackup
 from .step_make_healthchecks_ping import StepMakeHealthchecksPing
 from .step_make_pg_win_database_backup import StepMakePgDatabaseWinBackup
 from .step_s3_multipart_upload_with_rotation import StepS3MultipartUploadWithRotation
@@ -29,6 +29,7 @@ def create_steps_factory():
 
     factory.register_class(StepMakeDirectoryForBackup)
     factory.register_class(StepMakeFirebirdDatabaseBackup)
+    factory.register_class(StepMakeFirebirdLinuxDatabaseBackup)
     factory.register_class(StepCalculateFileHashAndSaveToFile)
     factory.register_class(StepCompressFileWith7Z)
     factory.register_class(StepValidate7ZArchive)
