@@ -41,7 +41,8 @@ if __name__ == "__main__":
             PACKAGE_NAME: ["./config/*.yaml"]
         },
         version=__version__,
-        description="Module to support VRC-T70 hardware",
+        description="Module to perform scheduled backups for FB/PG databases with support for backups uploading "
+                    "into S3 (with rotation) and support of integration with Healchecks.io",
         long_description=LONG_DESCTIPTION,
         long_description_content_type="text/x-rst",
         author="Bohdan Danishevsky",
