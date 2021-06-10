@@ -22,6 +22,16 @@ predefined_steps:
     generates:
       backup_file_name: "{{backup_file_name}}"
 
+  linux_firebird_backup: &linux_firebird_backup
+    name: "linux_firebird_backup"
+    human_readable_name: "Firebird database backup"
+    command_template: "/opt/firebird/bin/gbak -backup_database -user {{user_name}} -password {{password}} -verbose -y {{output_folder_name}}/{{backup_log_name}} {{database_host}}:{{database_path}} {{output_folder_name}}/{{backup_file_name}}"
+    backup_log_name: "backup.log"
+    backup_file_name: "{{main_target_name}}.fbk"
+    dry_run_command: "gbak -z"
+    generates:
+      backup_file_name: "{{backup_file_name}}"
+
   pg_win_backup: &pg_win_backup
     name: "pg_win_backup"
     human_readable_name: "PostgeSQL database backup (Windows OS)"
@@ -133,10 +143,23 @@ flows:
 
   pg7zs3rotation-flow:
     description: "Backup of PostgreSQL databases with further compression using 7z and uploading to the S3 storage"
-    human_readable_name: "PG backup and uploading to the S3 bucket with rotation"
+    human_readable_name: "PG backup and uploading to the S3 bucket with rotation + healthcheck ping"
     steps:
       - <<: *mkdir_for_backup_step_config
       - <<: *pg_win_backup
+      - <<: *calculate_file_hash_and_save_in_file_1
+      - <<: *7z_compress
+      - <<: *calculate_file_hash_and_save_in_file_2
+      - <<: *validate_7z_archive
+      - <<: *s3_multipart_upload_with_rotation
+      - <<: *healthchecks_ping
+
+  fblinux7zs3rotation-flow:
+    description: "Backup of Firebird databases with further compression using 7z and uploading to the S3 storage and healthcheck ping"
+    human_readable_name: "FB backup and uploading to the S3 bucket with rotation + healthcheck ping"
+    steps:
+      - <<: *mkdir_for_backup_step_config
+      - <<: *linux_firebird_backup
       - <<: *calculate_file_hash_and_save_in_file_1
       - <<: *7z_compress
       - <<: *calculate_file_hash_and_save_in_file_2
